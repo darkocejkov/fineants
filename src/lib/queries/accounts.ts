@@ -29,9 +29,9 @@ export function totalsByCurrency(db: Db): { currency: string; balanceCents: numb
 
 export function updateAccountSettings(db: Db, id: string, patch: { nickname?: string | null; type?: AccountType | null; hidden?: boolean }): void {
   const set: Partial<AccountRow> = {};
-  if ("nickname" in patch) set.nickname = patch.nickname?.trim() ? patch.nickname.trim() : null;
-  if ("type" in patch) set.type = patch.type ?? null;
-  if ("hidden" in patch) set.hidden = patch.hidden ?? false;
+  if (patch.nickname !== undefined) set.nickname = patch.nickname?.trim() ? patch.nickname.trim() : null;
+  if (patch.type !== undefined) set.type = patch.type ?? null;
+  if (patch.hidden !== undefined) set.hidden = patch.hidden ?? false;
   if (Object.keys(set).length === 0) return;
   db.update(accounts).set(set).where(eq(accounts.id, id)).run();
 }
