@@ -91,6 +91,21 @@ export function Pagination({
     sp.set("page", String(p));
     return `${basePath}?${sp.toString()}`;
   };
+  // Past the last page there are rows, just not here, so say that rather than "nothing matches".
+  if (page > pages) {
+    return (
+      <div className="pagination">
+        <p className="small">
+          Page {page} does not exist. This list has {pages === 1 ? "1 page" : `${pages} pages`}.
+        </p>
+        <div className="pagination-steps">
+          <Link className="button" href={href(pages)}>
+            Go to last page
+          </Link>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="pagination">
       <p className="small">

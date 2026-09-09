@@ -28,6 +28,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   // Hidden accounts stay out of "All accounts" but are shown when one is picked on purpose.
   const { rows, total, page, pageSize } = listTransactions(db, { ...filter, includeHidden: Boolean(filter.accountId) });
   const params = { account: filter.accountId, q: filter.q, from: filter.from, to: filter.to };
+  // Beyond the last page the pagination line explains itself; an empty state would misread as "no matches".
+  const pastEnd = total > 0 && rows.length === 0;
 
   return (
     <section className="section section-lead">
@@ -36,7 +38,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         <p className="section-meta">newest first</p>
       </div>
       <TransactionFilters accounts={accounts} current={filter} basePath="/transactions" />
-      <TransactionsTable rows={rows} resetHref="/transactions" />
+      {pastEnd ? null : <TransactionsTable rows={rows} resetHref="/transactions" />}
       <Pagination page={page} total={total} pageSize={pageSize} basePath="/transactions" params={params} />
     </section>
   );

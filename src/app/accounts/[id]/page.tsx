@@ -26,7 +26,8 @@ export default async function AccountPage({
   const { id } = await params;
   const sp = await searchParams;
   const db = getDb();
-  const account = getAccount(db, decodeURIComponent(id));
+  // Next has already decoded the segment; decoding again throws URIError on an id like "%".
+  const account = getAccount(db, id);
   if (!account) notFound();
   const basePath = `/accounts/${encodeURIComponent(account.id)}`;
   const filter = {
@@ -41,6 +42,8 @@ export default async function AccountPage({
   const { rows, total, page, pageSize } = listTransactions(db, filter);
   const series = accountBalanceSeries(db, account.id, 365);
   const name = displayName(account);
+  // Beyond the last page the pagination line explains itself; an empty state would misread as "no matches".
+  const pastEnd = total > 0 && rows.length === 0;
 
   return (
     <>
@@ -83,7 +86,7 @@ export default async function AccountPage({
           <p className="section-meta">newest first</p>
         </div>
         <TransactionFilters accounts={[]} current={filter} basePath={basePath} hideAccountSelect />
-        <TransactionsTable rows={rows} showAccount={false} resetHref={basePath} />
+        {pastEnd ? null : <TransactionsTable rows={rows} showAccount={false} resetHref={basePath} />}
         <Pagination
           page={page}
           total={total}
