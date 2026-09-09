@@ -66,9 +66,9 @@ export async function fetchAccounts(accessUrl: string, opts: FetchAccountsOption
     throw new SimpleFinNetworkError(cause);
   }
   const rawBody = await res.text();
-  if (res.status === 403) throw new SimpleFinAuthError();
-  if (res.status === 402) throw new SimpleFinPaymentError();
-  if (!res.ok) throw new SimpleFinHttpError(res.status, rawBody);
+  if (res.status === 403) throw Object.assign(new SimpleFinAuthError(), { status: 403, rawBody });
+  if (res.status === 402) throw Object.assign(new SimpleFinPaymentError(), { status: 402, rawBody });
+  if (!res.ok) throw Object.assign(new SimpleFinHttpError(res.status, rawBody), { rawBody });
   let json: unknown;
   try {
     json = JSON.parse(rawBody);

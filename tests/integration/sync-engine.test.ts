@@ -4,9 +4,9 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { makeTestDb } from "../helpers/db";
 import { makeFetchMock, jsonResponse } from "../helpers/fetch";
-import { runSync, RATE_GUARD_SECONDS } from "@/lib/sync/engine";
+import { runSync, RATE_GUARD_SECONDS, hashAccessUrl } from "@/lib/sync/engine";
 import { accounts, transactions, balanceSnapshots, syncRuns, connections } from "@/lib/db/schema";
-import { getState, STATE_KEYS } from "@/lib/db/appState";
+import { getState, setState, STATE_KEYS } from "@/lib/db/appState";
 import { DAY } from "@/lib/sync/windows";
 
 const ACCESS = "https://u:p@bridge.example/simplefin";
@@ -88,6 +88,48 @@ describe("runSync incremental", () => {
   });
 });
 
+describe("runSync pending reconciliation by effective date", () => {
+  it("deletes a pending row dated by posted (no transacted_at) once it vanishes inside the window", async () => {
+    const { db, d } = deps();
+    const seeded = fixture("old-shape.json");
+    seeded.accounts[0].transactions[1] = { id: "TX-2", posted: 1757395000, amount: "-12.00", description: "COFFEE", payee: "Coffee", memo: "", pending: true };
+    await runSync({ ...d, fetchImpl: makeFetchMock(() => jsonResponse(seeded)) }, { trigger: "cli" });
+    const vanished = fixture("old-shape.json");
+    vanished.accounts[0].transactions = [vanished.accounts[0].transactions[0]];
+    const r = await runSync({ ...d, fetchImpl: makeFetchMock(() => jsonResponse(vanished)), now: () => NOW_MS + 7 * 3600 * 1000 }, { trigger: "cli" });
+    expect(r.runs[0].pendingRemoved).toBe(1);
+    expect(db.select().from(transactions).where(eq(transactions.id, "TX-2")).get()).toBeUndefined();
+  });
+  it("does not delete a pending row whose effective date falls outside the window", async () => {
+    const { db, d } = deps();
+    const seeded = fixture("old-shape.json");
+    seeded.accounts[0].transactions[1] = { id: "TX-2", posted: 946684800, amount: "-12.00", description: "OLD PENDING", payee: "Coffee", memo: "", pending: true };
+    await runSync({ ...d, fetchImpl: makeFetchMock(() => jsonResponse(seeded)) }, { trigger: "cli" });
+    const vanished = fixture("old-shape.json");
+    vanished.accounts[0].transactions = [vanished.accounts[0].transactions[0]];
+    const r = await runSync({ ...d, fetchImpl: makeFetchMock(() => jsonResponse(vanished)), now: () => NOW_MS + 7 * 3600 * 1000 }, { trigger: "cli" });
+    expect(r.runs[0].pendingRemoved).toBe(0);
+    expect(db.select().from(transactions).where(eq(transactions.id, "TX-2")).get()).toBeDefined();
+  });
+  it("keeps a dateless pending row through earlier windows of a forced multi-window run, deleting it only in the newest window", async () => {
+    const { db, d } = deps();
+    const stamp = new Date(NOW_MS).toISOString();
+    db.insert(connections).values({ id: "conn-seed", name: "Seed Bank", raw: "{}", firstSeenAt: stamp, lastSeenAt: stamp }).run();
+    db.insert(accounts)
+      .values({ id: "ACC-1", connectionId: "conn-seed", name: "Chequing", currency: "CAD", balanceCents: 100000, balanceDate: 1757400000, raw: "{}", firstSeenAt: stamp, lastSeenAt: stamp })
+      .run();
+    db.insert(transactions)
+      .values({ id: "TX-DATELESS", accountId: "ACC-1", posted: 0, transactedAt: null, amountCents: -500, description: "PENDING NO DATE", pending: true, raw: "{}", firstSeenAt: stamp, lastSeenAt: stamp })
+      .run();
+
+    const r = await runSync(d, { trigger: "cli", force: true });
+    expect(r.runs).toHaveLength(5);
+    expect(r.runs.slice(0, 4).map((run) => run.pendingRemoved)).toEqual([0, 0, 0, 0]);
+    expect(r.runs[4].pendingRemoved).toBe(1);
+    expect(db.select().from(transactions).where(eq(transactions.id, "TX-DATELESS")).get()).toBeUndefined();
+  });
+});
+
 describe("runSync guards and failures", () => {
   it("skips when last run started under 30 minutes ago unless forced", async () => {
     const { d, fetchImpl } = deps();
@@ -106,11 +148,23 @@ describe("runSync guards and failures", () => {
     expect(r.runs[0].status).toBe("failed");
     expect(r.runs[0].error).toMatch(/403/);
     expect(getState(db, STATE_KEYS.credentialsInvalid)).toBeDefined();
+    const failedRun = db.select().from(syncRuns).get()!;
+    expect(failedRun.httpStatus).toBe(403);
+    expect(failedRun.rawResponse).toBe("no");
     const r2 = await runSync({ ...d, now: () => NOW_MS + DAY * 1000 }, { trigger: "scheduled" });
     expect(r2.skipped).toBe("credentials_invalid");
     const r3 = await runSync({ ...d, accessUrl: "https://u:new@bridge.example/simplefin", fetchImpl: makeFetchMock(() => jsonResponse(fixture("new-shape.json"))), now: () => NOW_MS + DAY * 1000 }, { trigger: "scheduled" });
     expect(r3.skipped).toBeUndefined();
     expect(getState(db, STATE_KEYS.credentialsInvalid)).toBeUndefined();
+  });
+  it("records http status and raw body on a 5xx failure", async () => {
+    const { db, d } = deps(makeTestDb(), () => new Response("server exploded", { status: 500 }));
+    const r = await runSync(d, { trigger: "cli" });
+    expect(r.runs[0].status).toBe("failed");
+    expect(r.runs[0].error).toMatch(/500/);
+    const failedRun = db.select().from(syncRuns).get()!;
+    expect(failedRun.httpStatus).toBe(500);
+    expect(failedRun.rawResponse).toBe("server exploded");
   });
   it("records a failed run on network error and keeps going next time", async () => {
     let calls = 0;
@@ -120,12 +174,22 @@ describe("runSync guards and failures", () => {
     expect(r.runs).toHaveLength(1); // stops after first failure
     expect(getState(db, STATE_KEYS.lastSuccessfulSyncEnd)).toBeUndefined();
     const r2 = await runSync({ ...d, now: () => NOW_MS + 3600 * 1000 }, { trigger: "cli", force: true });
-    expect(r2.runs.every((x) => r2.runs.length > 0 && x.status === "partial")).toBe(true); // new-shape has con.auth errlist
+    expect(r2.runs.length).toBeGreaterThan(0);
+    expect(r2.runs.every((x) => x.status === "partial")).toBe(true); // new-shape has con.auth errlist
   });
   it("stores raw body even when parse fails", async () => {
     const { db, d } = deps(makeTestDb(), () => new Response("<html>nope</html>", { status: 200 }));
     const r = await runSync(d, { trigger: "cli" });
     expect(r.runs[0].status).toBe("failed");
     expect(db.select().from(syncRuns).all()[0].rawResponse).toContain("<html>");
+  });
+  it("clears a stale credentials_invalid flag once a forced sync succeeds", async () => {
+    const { db, d } = deps();
+    setState(db, STATE_KEYS.credentialsInvalid, { reason: "stale", accessUrlHash: hashAccessUrl(ACCESS), at: new Date(0).toISOString() });
+    const r = await runSync(d, { trigger: "manual", force: true });
+    expect(r.skipped).toBeUndefined();
+    expect(getState(db, STATE_KEYS.credentialsInvalid)).toBeUndefined();
+    const r2 = await runSync({ ...d, now: () => NOW_MS + 7 * 3600 * 1000 }, { trigger: "scheduled" });
+    expect(r2.skipped).toBeUndefined();
   });
 });

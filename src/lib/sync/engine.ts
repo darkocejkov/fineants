@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { nowIso } from "../db/client";
 import { accounts, balanceSnapshots, connections, syncRuns, transactions } from "../db/schema";
 import { deleteState, getState, setState, STATE_KEYS } from "../db/appState";
 import { fetchAccounts, SimpleFinAuthError } from "../simplefin/client";
@@ -65,21 +64,31 @@ export async function runSync(deps: SyncDeps, opts: { trigger: SyncTrigger; forc
   const lastSuccessEnd = getState<number>(db, STATE_KEYS.lastSuccessfulSyncEnd) ?? null;
   const windows = computeWindows(lastSuccessEnd, nowSec, deps.backfillDays);
   const runs: SyncRunSummary[] = [];
+  const lastWindowEnd = windows[windows.length - 1]?.end;
 
   for (const window of windows) {
-    const summary = await syncWindow(deps, accessUrl, urlHash, window, opts.trigger, nowMs);
+    const isLatestWindow = window.end === lastWindowEnd;
+    const summary = await syncWindow(deps, accessUrl, urlHash, window, opts.trigger, nowMs, isLatestWindow);
     runs.push(summary);
     if (summary.status === "failed") break;
   }
   return { runs };
 }
 
-async function syncWindow(deps: SyncDeps, accessUrl: string, urlHash: string, window: SyncWindow, trigger: SyncTrigger, nowMs: number): Promise<SyncRunSummary> {
+async function syncWindow(
+  deps: SyncDeps,
+  accessUrl: string,
+  urlHash: string,
+  window: SyncWindow,
+  trigger: SyncTrigger,
+  nowMs: number,
+  isLatestWindow: boolean,
+): Promise<SyncRunSummary> {
   const { db } = deps;
-  const startedAt = isoFromMs(nowMs);
+  const stamp = isoFromMs(nowMs);
   const run = db
     .insert(syncRuns)
-    .values({ trigger, status: "running", startedAt, windowStart: window.start, windowEnd: window.end })
+    .values({ trigger, status: "running", startedAt: stamp, windowStart: window.start, windowEnd: window.end })
     .returning({ id: syncRuns.id })
     .get();
 
@@ -96,17 +105,17 @@ async function syncWindow(deps: SyncDeps, accessUrl: string, urlHash: string, wi
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (err instanceof SimpleFinAuthError) {
-      setState(db, STATE_KEYS.credentialsInvalid, { reason: message, accessUrlHash: urlHash, at: nowIso() } satisfies CredentialsInvalidState);
+      setState(db, STATE_KEYS.credentialsInvalid, { reason: message, accessUrlHash: urlHash, at: stamp } satisfies CredentialsInvalidState);
     }
-    const raw = (err as { rawBody?: string }).rawBody;
+    const errInfo = err as { rawBody?: string; body?: string; status?: number };
+    const raw = errInfo.rawBody ?? errInfo.body;
     db.update(syncRuns)
-      .set({ status: "failed", finishedAt: nowIso(), error: message, rawResponse: raw, httpStatus: (err as { status?: number }).status })
+      .set({ status: "failed", finishedAt: stamp, error: message, rawResponse: raw, httpStatus: errInfo.status })
       .where(eq(syncRuns.id, run.id))
       .run();
     return { ...base, status: "failed", error: message };
   }
 
-  const stamp = nowIso();
   const result = db.transaction((tx) => {
     for (const c of accountSet.connections) {
       tx.insert(connections)
@@ -132,11 +141,15 @@ async function syncWindow(deps: SyncDeps, accessUrl: string, urlHash: string, wi
       }
 
       const seenIds = a.transactions.map((t) => t.id);
-      const windowStartIso = new Date(window.start * 1000).toISOString();
-      const inWindow = sql`((${transactions.transactedAt} is not null and ${transactions.transactedAt} >= ${window.start} and ${transactions.transactedAt} < ${window.end}) or (${transactions.transactedAt} is null and ${transactions.firstSeenAt} >= ${windowStartIso}))`;
+      // A pending transaction's "effective" date is its transacted_at if known, else its
+      // posted date (posted === 0 means "no date yet", so nullif turns that into NULL too).
+      const effective = sql`coalesce(${transactions.transactedAt}, nullif(${transactions.posted}, 0))`;
+      const reconcileWindow = isLatestWindow
+        ? sql`((${effective} is not null and ${effective} >= ${window.start} and ${effective} < ${window.end}) or ${effective} is null)`
+        : sql`(${effective} is not null and ${effective} >= ${window.start} and ${effective} < ${window.end})`;
       const where = seenIds.length
-        ? and(eq(transactions.accountId, a.id), eq(transactions.pending, true), notInArray(transactions.id, seenIds), inWindow)
-        : and(eq(transactions.accountId, a.id), eq(transactions.pending, true), inWindow);
+        ? and(eq(transactions.accountId, a.id), eq(transactions.pending, true), notInArray(transactions.id, seenIds), reconcileWindow)
+        : and(eq(transactions.accountId, a.id), eq(transactions.pending, true), reconcileWindow);
       removed += tx.delete(transactions).where(where).run().changes;
 
       tx.insert(balanceSnapshots)
@@ -149,7 +162,9 @@ async function syncWindow(deps: SyncDeps, accessUrl: string, urlHash: string, wi
       .set({ status, finishedAt: stamp, httpStatus, accountsSeen: accountSet.accounts.length, transactionsUpserted: upserted, pendingRemoved: removed, errlist: JSON.stringify(accountSet.errlist), rawResponse: rawBody })
       .where(eq(syncRuns.id, run.id))
       .run();
-    setState(tx as unknown as Db, STATE_KEYS.lastSuccessfulSyncEnd, window.end);
+    setState(tx, STATE_KEYS.lastSuccessfulSyncEnd, window.end);
+    // The fetch succeeded, so whatever credentials we used are good — clear any stale flag.
+    deleteState(tx, STATE_KEYS.credentialsInvalid);
     return { status, upserted, removed } as const;
   });
 
