@@ -141,6 +141,11 @@ a:hover {
   border-top: 3px solid var(--ink);
 }
 
+/* The masthead already sets the page's top gap, so the first section does not add to it. */
+.section-lead {
+  margin-top: 0;
+}
+
 .section-head {
   display: flex;
   flex-wrap: wrap;
@@ -160,6 +165,8 @@ a:hover {
 .section-meta {
   font-size: 0.8125rem;
   color: var(--ink-2);
+  /* Meta lines carry dates and counts, and every number in the sheet is tabular. */
+  font-variant-numeric: tabular-nums;
 }
 
 .section-alert {
@@ -222,6 +229,11 @@ a:hover {
 .hero-note {
   margin-top: 0.375rem;
   max-width: 72ch;
+}
+
+/* On account detail a second note follows the change sentence, and wants a little more air. */
+.hero-note + .hero-note {
+  margin-top: 0.625rem;
 }
 
 .hero-sync {
@@ -377,6 +389,12 @@ a:hover {
   border-color: var(--ink);
 }
 
+/* Reset, Previous and Next are links wearing the button box, so they drop the link underline. */
+a.button {
+  display: inline-block;
+  text-decoration: none;
+}
+
 .button-primary {
   border-color: var(--cobalt);
   background: var(--cobalt);
@@ -402,6 +420,48 @@ select {
   background: var(--paper-2);
   color: var(--ink);
   font: inherit;
+}
+
+/* Filters: one row of plain fields, each label small and directly above its input. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+/* Search holds the longest value of the row; the dates size themselves. */
+.filter-search input {
+  width: 16rem;
+  max-width: 100%;
+}
+
+/* Kept together so a narrow window never wraps Reset away from Filter. */
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.625rem 1.5rem;
+  margin-top: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-steps {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .syncbar {
