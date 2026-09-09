@@ -476,6 +476,50 @@ select {
   color: var(--ink-2);
 }
 
+/* Range, grouping and currency on Spending: one ruled row of plain links, its
+   groups told apart by the gap alone. The row's own rule is a subordinate 1px,
+   so the section's 3px rule above it still carries the structure. */
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2.5rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--paper-2);
+}
+
+.choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.375rem;
+}
+
+/* Marked like the masthead's links, not like a button: a filled control here
+   would spend the page's boldness a second time, next to the stamp. */
+.choice {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.choice:hover {
+  color: var(--ink);
+}
+
+.choice-current {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--ink);
+  text-underline-offset: 6px;
+}
+
+/* An aside after the last section: quieter than the sheet's text, not smaller. */
+.footnote {
+  margin-top: 2.75rem;
+  max-width: 72ch;
+  color: var(--ink-2);
+}
+
 /* ---- charts (they sit on the page, unframed) ----------------------------- */
 
 .charts {
@@ -488,6 +532,16 @@ select {
   margin-bottom: 0.25rem;
   font-size: 0.8125rem;
   color: var(--ink-2);
+}
+
+/* The bar chart's key is two words in the label line, tinted to their own bars,
+   so it needs no swatches and no <Legend>. */
+.chart-key-out {
+  color: var(--oxblood);
+}
+
+.chart-key-in {
+  color: var(--bottle);
 }
 
 .chart .recharts-cartesian-grid-horizontal line {
