@@ -1,0 +1,25 @@
+import "dotenv/config";
+import { loadConfig } from "../src/lib/config";
+import { createDb } from "../src/lib/db/client";
+import { runSync } from "../src/lib/sync/engine";
+
+async function main() {
+  const config = loadConfig();
+  const force = process.argv.includes("--force");
+  const db = createDb(config.databasePath);
+  const result = await runSync({ db, accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays }, { trigger: "cli", force });
+  if (result.skipped) {
+    console.log(`Skipped: ${result.skipped}${result.skipped === "rate_limited" ? " (use --force to override)" : ""}`);
+    return;
+  }
+  for (const r of result.runs) {
+    const w = `${new Date(r.windowStart * 1000).toISOString().slice(0, 10)}..${new Date(r.windowEnd * 1000).toISOString().slice(0, 10)}`;
+    console.log(`run #${r.runId} ${r.status} ${w} accounts=${r.accountsSeen} tx=${r.transactionsUpserted} pendingRemoved=${r.pendingRemoved}${r.error ? ` error=${r.error}` : ""}`);
+    for (const e of r.errlist) console.log(`  errlist ${e.code}: ${e.msg}`);
+  }
+}
+
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});
