@@ -49,7 +49,7 @@ export type Config = {
   port: number;
 };
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const result = envSchema.safeParse(env);
   if (!result.success) {
     const lines = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
