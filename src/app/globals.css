@@ -1,26 +1,449 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ---------------------------------------------------------------------------
+   fineants — the passbook. A ruled sheet: one heavy rule per section, quiet
+   type everywhere, boldness spent once on the stamped balance figures.
+   --------------------------------------------------------------------------- */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  color-scheme: light;
+  --paper: #f2f4f1;
+  --paper-2: #e3e8e3;
+  --ink: #16231f;
+  --ink-2: #556660;
+  --cobalt: #1f4fd8;
+  --bottle: #2c6e49;
+  --oxblood: #9c3b2e;
+  --ochre: #b8791a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+    --paper: #0f1614;
+    --paper-2: #1b2521;
+    --ink: #e8ede9;
+    --ink-2: #94a39b;
+    --cobalt: #8fa8ff;
+    --bottle: #6cc094;
+    --oxblood: #e58273;
+    --ochre: #e2ac4e;
   }
 }
 
+/* ---- page ---------------------------------------------------------------- */
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-archivo), system-ui, "Helvetica Neue", Arial, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-size: 0.9375rem;
+  font-weight: 400;
+  font-stretch: 100%;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sheet {
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  padding-bottom: 5rem;
+}
+
+@media (min-width: 48rem) {
+  .sheet {
+    padding-inline: 2.5rem;
+  }
+}
+
+/* No monospace anywhere, including data. <code> stays semantic, not typographic. */
+code,
+kbd,
+samp,
+pre {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  font-stretch: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--cobalt);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 120ms linear;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+/* ---- masthead ------------------------------------------------------------ */
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 2rem;
+  padding-block: 1.75rem 1.25rem;
+}
+
+.wordmark {
+  font-size: 1rem;
+  font-weight: 700;
+  font-stretch: 100%;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.navlinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.375rem;
+}
+
+.navlink {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.navlink:hover {
+  color: var(--ink);
+}
+
+.navlink-current {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--ink);
+  text-underline-offset: 6px;
+}
+
+/* ---- sections ------------------------------------------------------------ */
+
+/* The 3px rule is the only structural device on the page. */
+.section {
+  margin-top: 2.75rem;
+  padding-top: 0.875rem;
+  border-top: 3px solid var(--ink);
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.125rem 1.5rem;
+  margin-bottom: 1.125rem;
+}
+
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-stretch: 100%;
+  line-height: 1.3;
+}
+
+.section-meta {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.section-alert {
+  border-top-color: var(--oxblood);
+}
+
+.section-alert .section-title {
+  color: var(--oxblood);
+}
+
+.alert-list {
+  margin: 0;
+  padding-left: 1.125rem;
+  list-style: disc outside;
+  max-width: 72ch;
+}
+
+.alert-list li + li {
+  margin-top: 0.375rem;
+}
+
+.alert-advice {
+  margin-top: 0.75rem;
+  max-width: 72ch;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+/* ---- hero: the stamped net position -------------------------------------- */
+
+.hero {
+  margin-top: 0;
+  padding-top: 1.75rem;
+}
+
+.stamp {
+  font-size: clamp(2.75rem, 6vw, 4.75rem);
+  font-weight: 600;
+  font-stretch: 112%;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-figure + .hero-figure {
+  margin-top: 1.75rem;
+}
+
+.hero-note {
+  margin-top: 0.375rem;
+  max-width: 72ch;
+}
+
+.hero-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.625rem 1.5rem;
+  margin-top: 2.25rem;
+}
+
+/* Before the first sync there are no figures above it. */
+.hero-sync:first-child {
+  margin-top: 0;
+}
+
+/* ---- money --------------------------------------------------------------- */
+
+.amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.amount-in {
+  color: var(--bottle);
+}
+
+.amount-out {
+  color: var(--oxblood);
+}
+
+/* ---- ledgers (they replace cards everywhere) ----------------------------- */
+
+.ledger-scroll {
+  overflow-x: auto;
+}
+
+.ledger {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger th,
+.ledger td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--paper-2);
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.ledger th:first-child,
+.ledger td:first-child {
+  padding-left: 0;
+}
+
+.ledger th:last-child,
+.ledger td:last-child {
+  padding-right: 0;
+}
+
+.ledger th {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.ledger tbody tr {
+  transition: background-color 120ms linear;
+}
+
+.ledger tbody tr:hover {
+  background: var(--paper-2);
+}
+
+/* Qualified with th/td so these outweigh the `.ledger th, .ledger td` base rule above,
+   which sets text-align: left at one class plus one type. */
+.ledger th.ledger-num,
+.ledger td.ledger-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger th.ledger-date,
+.ledger td.ledger-date {
+  width: 8.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger-quiet {
+  color: var(--ink-2);
+}
+
+.ledger a {
+  color: var(--cobalt);
+  text-decoration: none;
+}
+
+.ledger a:hover,
+.ledger a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ledger-pending {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--ochre);
+}
+
+.ledger td.ledger-num-pending .amount {
+  color: var(--ochre);
+}
+
+/* ---- empty states -------------------------------------------------------- */
+
+.empty {
+  padding-bottom: 1.5rem;
+}
+
+.empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-stretch: 100%;
+  line-height: 1.3;
+}
+
+.empty-guidance {
+  margin-top: 0.5rem;
+  max-width: 72ch;
+}
+
+/* ---- controls ------------------------------------------------------------ */
+
+.button {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--ink-2);
+  border-radius: 2px;
+  background: var(--paper-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  transition:
+    background-color 120ms linear,
+    color 120ms linear,
+    border-color 120ms linear;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.button-primary {
+  border-color: var(--cobalt);
+  background: var(--cobalt);
+  color: var(--paper);
+}
+
+.button-primary:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+input,
+select {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--ink-2);
+  border-radius: 2px;
+  background: var(--paper-2);
+  color: var(--ink);
+  font: inherit;
+}
+
+.syncbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.625rem 0.75rem;
+}
+
+.small {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+/* ---- charts (they sit on the page, unframed) ----------------------------- */
+
+.chart .recharts-cartesian-grid-horizontal line {
+  stroke: var(--paper-2);
+}
+
+.chart .recharts-cartesian-axis-tick-value {
+  fill: var(--ink-2);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart .recharts-line-curve {
+  stroke: var(--ink);
+}
+
+/* A currency with one snapshot has no line to draw, so its point is marked instead. */
+.chart .recharts-line-dot {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+.chart .recharts-tooltip-cursor {
+  stroke: var(--cobalt);
+}
+
+.chart-line-1 .recharts-line-curve {
+  stroke-dasharray: 7 4;
+}
+
+.chart-line-2 .recharts-line-curve {
+  stroke-dasharray: 1 3;
+}
+
+.chart-line-3 .recharts-line-curve {
+  stroke-dasharray: 14 4 2 4;
+}
+
+.chart-key {
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
 }

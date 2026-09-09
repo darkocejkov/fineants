@@ -1,69 +1,192 @@
-import Image from "next/image";
+import Link from "next/link";
+import { getDb } from "@/lib/db/client";
+import { listAccounts, totalsByCurrency, displayName } from "@/lib/queries/accounts";
+import { netWorthSeries, type SeriesPoint } from "@/lib/queries/balances";
+import { recentTransactions } from "@/lib/queries/transactions";
+import { getSyncStatus, type SyncStatus } from "@/lib/queries/syncRuns";
+import { formatCents } from "@/lib/money";
+import { unixToDate, relativeFromNow, isoToLocal } from "@/lib/format";
+import { Amount } from "@/components/Amount";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { SyncButton } from "@/components/SyncButton";
+import { NetWorthChart } from "@/components/charts/NetWorthChart";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const dayMs = (date: string) => Date.parse(`${date}T00:00:00Z`);
+
+// Within the last week a weekday reads faster than a date; further back it is ambiguous.
+function whenSynced(previous: string, latest: string): string {
+  const from = dayMs(previous);
+  const to = dayMs(latest);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return `the ${previous} sync`;
+  const days = Math.round((to - from) / 86400000);
+  if (days >= 0 && days <= 6) return `${WEEKDAYS[new Date(from).getUTCDay()]}'s sync`;
+  return `the ${previous} sync`;
+}
+
+// The change since the previous snapshot, read off the last two points of the currency's series.
+function changeSentence(points: SeriesPoint[], currency: string): string {
+  if (points.length < 2) return "No earlier snapshot to compare yet.";
+  const previous = points[points.length - 2];
+  const latest = points[points.length - 1];
+  const delta = latest.balanceCents - previous.balanceCents;
+  const when = whenSynced(previous.date, latest.date);
+  if (delta === 0) return `Unchanged since ${when}.`;
+  return `${delta > 0 ? "Up" : "Down"} ${formatCents(Math.abs(delta), currency)} since ${when}.`;
+}
+
+function syncSentence(latest: SyncStatus["latest"]): string {
+  if (!latest) return "Nothing has synced yet.";
+  const when = relativeFromNow(latest.finishedAt ?? latest.startedAt);
+  if (latest.status === "running") return `A sync started ${when} and is still running.`;
+  const verb = latest.status === "success" ? "finished" : latest.status === "partial" ? "finished with errors" : "failed";
+  return `The last sync ${verb} ${when}, at ${isoToLocal(latest.finishedAt)}.`;
+}
+
+export default function OverviewPage() {
+  const db = getDb();
+  const status = getSyncStatus(db);
+  const accounts = listAccounts(db);
+  const totals = totalsByCurrency(db);
+  const series = netWorthSeries(db, 365);
+  const recent = recentTransactions(db, 20);
+  const pointsFor = new Map(series.map((s) => [s.currency, s.points]));
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <h1 className="sr-only">Overview</h1>
+
+      <section className="section hero">
+        {totals.map((t) => (
+          <div key={t.currency} className="hero-figure">
+            <p className="stamp">
+              <Amount cents={t.balanceCents} currency={t.currency} />
+            </p>
+            <p className="hero-note">{changeSentence(pointsFor.get(t.currency) ?? [], t.currency)}</p>
+          </div>
+        ))}
+        <div className="hero-sync">
+          <p className="small">{syncSentence(status.latest)}</p>
+          <SyncButton />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </section>
+
+      <ErrorBanner status={status} />
+
+      {accounts.length === 0 ? (
+        <section className="section">
+          <EmptyState title="No accounts yet">
+            Run <code>npm run claim</code> with your setup token, put the access URL it prints into{" "}
+            <code>SIMPLEFIN_ACCESS_URL</code> in <code>.env</code>, then choose Sync now. The{" "}
+            <Link href="/explorer">explorer</Link> shows the raw SimpleFin responses.
+          </EmptyState>
+        </section>
+      ) : (
+        <>
+          <section className="section">
+            <div className="section-head">
+              <h2 className="section-title">Net worth over time</h2>
+              <p className="section-meta">last 365 days</p>
+            </div>
+            <NetWorthChart series={series} />
+          </section>
+
+          <section className="section">
+            <div className="section-head">
+              <h2 className="section-title">Accounts</h2>
+              <p className="section-meta">{accounts.length === 1 ? "1 account" : `${accounts.length} accounts`}</p>
+            </div>
+            <div className="ledger-scroll">
+              <table className="ledger">
+                <thead>
+                  <tr>
+                    <th scope="col">Account</th>
+                    <th scope="col">Type</th>
+                    <th scope="col" className="ledger-date">
+                      As of
+                    </th>
+                    <th scope="col" className="ledger-num">
+                      Balance
+                    </th>
+                    <th scope="col" className="ledger-num">
+                      Available
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        <Link href={`/accounts/${encodeURIComponent(a.id)}`}>{displayName(a)}</Link>
+                      </td>
+                      <td className="ledger-quiet">{a.type ?? "unclassified"}</td>
+                      <td className="ledger-date">{unixToDate(a.balanceDate)}</td>
+                      <td className="ledger-num">
+                        <Amount cents={a.balanceCents} currency={a.currency} />
+                      </td>
+                      <td className="ledger-num">
+                        {a.availableBalanceCents !== null ? (
+                          <Amount cents={a.availableBalanceCents} currency={a.currency} signColour={false} />
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-head">
+              <h2 className="section-title">Recent transactions</h2>
+              <p className="section-meta">
+                {recent.length} most recent, or see <Link href="/transactions">all transactions</Link>
+              </p>
+            </div>
+            {recent.length === 0 ? (
+              <EmptyState title="No transactions yet">
+                Choose Sync now to pull the last 365 days of activity from SimpleFin.
+              </EmptyState>
+            ) : (
+              <div className="ledger-scroll">
+                <table className="ledger">
+                  <thead>
+                    <tr>
+                      <th scope="col" className="ledger-date">
+                        Date
+                      </th>
+                      <th scope="col">Account</th>
+                      <th scope="col">Description</th>
+                      <th scope="col" className="ledger-num">
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent.map((t) => (
+                      <tr key={t.id}>
+                        <td className="ledger-date">
+                          {unixToDate(t.effectiveDate)}
+                          {t.pending ? <span className="ledger-pending">pending</span> : null}
+                        </td>
+                        <td className="ledger-quiet">{t.accountName}</td>
+                        <td>{t.payee || t.description}</td>
+                        <td className={t.pending ? "ledger-num ledger-num-pending" : "ledger-num"}>
+                          <Amount cents={t.amountCents} currency={t.currency} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </>
   );
 }
