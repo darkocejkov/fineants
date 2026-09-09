@@ -1,0 +1,29 @@
+{
+  "errors": ["Connection to Example Bank may need attention"],
+  "accounts": [
+    {
+      "org": { "domain": "examplebank.com", "name": "Example Bank", "sfin-url": "https://bridge.example/simplefin", "url": "https://examplebank.com", "id": "org-1" },
+      "id": "ACC-1",
+      "name": "Everyday Chequing",
+      "currency": "CAD",
+      "balance": "1523.44",
+      "available-balance": "1500.00",
+      "balance-date": 1757400000,
+      "transactions": [
+        { "id": "TX-1", "posted": 1757300000, "amount": "-45.10", "description": "GROCERY MART", "payee": "Grocery Mart", "memo": "POS", "transaction_id": "bank-tx-1" },
+        { "id": "TX-2", "posted": 0, "amount": "-12.00", "description": "PENDING COFFEE", "payee": "Coffee", "memo": "", "pending": true, "transacted_at": 1757390000 }
+      ],
+      "holdings": [],
+      "extra": { "account-open-date": 1600000000 }
+    },
+    {
+      "org": { "domain": "examplebank.com", "name": "Example Bank", "sfin-url": "https://bridge.example/simplefin", "url": "https://examplebank.com", "id": "org-1" },
+      "id": "ACC-2",
+      "name": "Visa",
+      "currency": "CAD",
+      "balance": "-820.15",
+      "balance-date": 1757400000,
+      "transactions": []
+    }
+  ]
+}

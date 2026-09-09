@@ -1,0 +1,21 @@
+{
+  "errlist": [{ "code": "con.auth", "msg": "Please re-authenticate", "conn_id": "conn-9" }],
+  "connections": [
+    { "conn_id": "conn-9", "name": "New Bank", "org_id": "newbank", "org_url": "https://newbank.example", "sfin_url": "https://bridge.example/simplefin" }
+  ],
+  "accounts": [
+    {
+      "id": "ACC-9",
+      "name": "Savings",
+      "conn_id": "conn-9",
+      "currency": "USD",
+      "balance": "10000",
+      "available-balance": "10000",
+      "balance-date": 1757400000,
+      "transactions": [
+        { "id": "TX-9", "posted": 1757200000, "amount": "250.5", "description": "INTEREST", "transacted_at": 1757199000, "pending": false, "extra": { "category": "interest" } }
+      ],
+      "extra": { "apy": "4.1" }
+    }
+  ]
+}
