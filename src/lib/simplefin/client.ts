@@ -73,7 +73,11 @@ export async function fetchAccounts(accessUrl: string, opts: FetchAccountsOption
   try {
     json = JSON.parse(rawBody);
   } catch {
-    throw new SimpleFinParseError(`Response was not JSON: ${rawBody.slice(0, 120)}`);
+    throw Object.assign(new SimpleFinParseError(`Response was not JSON: ${rawBody.slice(0, 120)}`), { rawBody });
   }
-  return { accountSet: parseAccountSet(json), rawBody, httpStatus: res.status };
+  try {
+    return { accountSet: parseAccountSet(json), rawBody, httpStatus: res.status };
+  } catch (err) {
+    throw Object.assign(err as Error, { rawBody });
+  }
 }
