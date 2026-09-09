@@ -30,8 +30,8 @@ export function spendingByPeriod(db: Db, opts: { days: number; granularity: Gran
     .all();
 }
 
-export function topPayees(db: Db, opts: { days: number; limit?: number; nowMs?: number }): { label: string; currency: string; outflowCents: number; count: number }[] {
-  const since = Math.floor((opts.nowMs ?? Date.now()) / 1000) - opts.days * 86400;
+export function topPayees(db: Db, opts: { days: number; limit?: number; nowMs?: number; sinceSec?: number }): { label: string; currency: string; outflowCents: number; count: number }[] {
+  const since = opts.sinceSec ?? (Math.floor((opts.nowMs ?? Date.now()) / 1000) - opts.days * 86400);
   const limit = opts.limit ?? 10;
   const label = sql<string>`coalesce(nullif(${transactions.payee}, ''), ${transactions.description})`;
   const outflowCents = sql<number>`sum(-${transactions.amountCents})`.mapWith(Number);

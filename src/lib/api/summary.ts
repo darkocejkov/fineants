@@ -31,5 +31,12 @@ export function buildSpending(db: Db, range: SpendingRange, nowMs = Date.now()):
   const rows = spendingByPeriod(db, { days, granularity: "day", nowMs });
   const todayStr = new Date(nowMs).toISOString().slice(0, 10);
   const filtered = range === "today" ? rows.filter((r) => r.period === todayStr) : rows;
-  return { range, days: filtered, topPayees: topPayees(db, { days, limit: 10, nowMs }) };
+  // "today" must align to the UTC calendar day (matching the `days` filter above), not a
+  // rolling 24h window, so topPayees gets an explicit start-of-day cutoff for that range.
+  let sinceSec: number | undefined;
+  if (range === "today") {
+    const d = new Date(nowMs);
+    sinceSec = Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 1000);
+  }
+  return { range, days: filtered, topPayees: topPayees(db, { days, limit: 10, nowMs, sinceSec }) };
 }
