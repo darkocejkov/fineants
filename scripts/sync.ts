@@ -10,6 +10,7 @@ async function main() {
   const result = await runSync({ db, accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays }, { trigger: "cli", force });
   if (result.skipped) {
     console.log(`Skipped: ${result.skipped}${result.skipped === "rate_limited" ? " (use --force to override)" : ""}`);
+    if (result.skipped === "credentials_invalid") process.exitCode = 1;
     return;
   }
   for (const r of result.runs) {
@@ -17,6 +18,7 @@ async function main() {
     console.log(`run #${r.runId} ${r.status} ${w} accounts=${r.accountsSeen} tx=${r.transactionsUpserted} pendingRemoved=${r.pendingRemoved}${r.error ? ` error=${r.error}` : ""}`);
     for (const e of r.errlist) console.log(`  errlist ${e.code}: ${e.msg}`);
   }
+  if (result.runs.some((r) => r.status === "failed")) process.exitCode = 1;
 }
 
 main().catch((err) => {
