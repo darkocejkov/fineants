@@ -2331,7 +2331,7 @@ describe("transactions", () => {
     expect(listTransactions(db, { accountId: "VISA" }).rows.map((r) => r.id)).toEqual(["t4", "t5"]);
     expect(listTransactions(db, { q: "coffee" }).rows.map((r) => r.id)).toEqual(["t2"]);
     expect(listTransactions(db, { q: "Employer" }).rows.map((r) => r.id)).toEqual(["t3"]);
-    expect(listTransactions(db, { from: "2026-09-06", to: "2026-09-08" }).rows.map((r) => r.id)).toEqual(["t2", "t3"]);
+    expect(listTransactions(db, { from: "2026-09-06", to: "2026-09-08" }).rows.map((r) => r.id)).toEqual(["t1", "t2", "t3"]);
   });
   it("paginates", () => {
     const p1 = listTransactions(db, { page: 1, pageSize: 3 });
@@ -2409,12 +2409,13 @@ import type { Db } from "../db/client";
 import { accounts, connections, type AccountRow, type AccountType } from "../db/schema";
 
 export function listAccounts(db: Db, opts: { includeHidden?: boolean } = {}): AccountRow[] {
-  const q = db
+  const rows = db
     .select({ a: accounts })
     .from(accounts)
     .leftJoin(connections, eq(accounts.connectionId, connections.id))
-    .orderBy(asc(connections.name), asc(accounts.name));
-  const rows = opts.includeHidden ? q.all() : q.where(eq(accounts.hidden, false)).all();
+    .where(opts.includeHidden ? undefined : eq(accounts.hidden, false))
+    .orderBy(asc(connections.name), asc(accounts.name))
+    .all();
   return rows.map((r) => r.a);
 }
 
@@ -3471,7 +3472,7 @@ export const dynamic = "force-dynamic";
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || undefined;
 
-export function filterFromParams(sp: SP): TxFilter {
+function filterFromParams(sp: SP): TxFilter {
   return { accountId: one(sp.account), q: one(sp.q), from: one(sp.from), to: one(sp.to), page: Number(one(sp.page) ?? 1) || 1, pageSize: 50 };
 }
 
