@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { listAccounts, totalsByCurrency, displayName } from "@/lib/queries/accounts";
-import { netWorthSeries, type SeriesPoint } from "@/lib/queries/balances";
+import { netWorthSeries } from "@/lib/queries/balances";
 import { recentTransactions } from "@/lib/queries/transactions";
 import { getSyncStatus, type SyncStatus } from "@/lib/queries/syncRuns";
-import { formatCents } from "@/lib/money";
 import { unixToDate, relativeFromNow, isoToLocal } from "@/lib/format";
+import { changeSentence } from "@/lib/sentences";
 import { Amount } from "@/components/Amount";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -13,31 +13,6 @@ import { SyncButton } from "@/components/SyncButton";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
 
 export const dynamic = "force-dynamic";
-
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-const dayMs = (date: string) => Date.parse(`${date}T00:00:00Z`);
-
-// Within the last week a weekday reads faster than a date; further back it is ambiguous.
-function whenSynced(previous: string, latest: string): string {
-  const from = dayMs(previous);
-  const to = dayMs(latest);
-  if (!Number.isFinite(from) || !Number.isFinite(to)) return `the ${previous} sync`;
-  const days = Math.round((to - from) / 86400000);
-  if (days >= 0 && days <= 6) return `${WEEKDAYS[new Date(from).getUTCDay()]}'s sync`;
-  return `the ${previous} sync`;
-}
-
-// The change since the previous snapshot, read off the last two points of the currency's series.
-function changeSentence(points: SeriesPoint[], currency: string): string {
-  if (points.length < 2) return "No earlier snapshot to compare yet.";
-  const previous = points[points.length - 2];
-  const latest = points[points.length - 1];
-  const delta = latest.balanceCents - previous.balanceCents;
-  const when = whenSynced(previous.date, latest.date);
-  if (delta === 0) return `Unchanged since ${when}.`;
-  return `${delta > 0 ? "Up" : "Down"} ${formatCents(Math.abs(delta), currency)} since ${when}.`;
-}
 
 function syncSentence(latest: SyncStatus["latest"]): string {
   if (!latest) return "Nothing has synced yet.";
@@ -64,7 +39,8 @@ export default function OverviewPage() {
         {totals.map((t) => (
           <div key={t.currency} className="hero-figure">
             <p className="stamp">
-              <Amount cents={t.balanceCents} currency={t.currency} />
+              <Amount cents={t.balanceCents} currency={t.currency} signColour={false} />
+              <span className="stamp-currency">{t.currency}</span>
             </p>
             <p className="hero-note">{changeSentence(pointsFor.get(t.currency) ?? [], t.currency)}</p>
           </div>
@@ -143,9 +119,11 @@ export default function OverviewPage() {
           <section className="section">
             <div className="section-head">
               <h2 className="section-title">Recent transactions</h2>
-              <p className="section-meta">
-                {recent.length} most recent, or see <Link href="/transactions">all transactions</Link>
-              </p>
+              {recent.length > 0 ? (
+                <p className="section-meta">
+                  {recent.length} most recent, or see <Link href="/transactions">all transactions</Link>
+                </p>
+              ) : null}
             </div>
             {recent.length === 0 ? (
               <EmptyState title="No transactions yet">

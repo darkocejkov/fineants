@@ -20,7 +20,7 @@ Colour (light):
 - `--cobalt` #1F4FD8 — interactive: links, focus ring, primary button, "now" markers
 - `--bottle` #2C6E49 — inflow, positive balances
 - `--oxblood` #9C3B2E — outflow, negative balances, failures
-- `--ochre` #B8791A — pending, partial, warnings
+- `--ochre` #8A5A10 — pending, partial, warnings (darkened from #B8791A for AA contrast on paper)
 
 Colour (dark, `prefers-color-scheme: dark`):
 - `--paper` #0F1614, `--paper-2` #1B2521, `--ink` #E8EDE9, `--ink-2` #94A39B, `--cobalt` #8FA8FF, `--bottle` #6CC094, `--oxblood` #E58273, `--ochre` #E2AC4E
@@ -36,14 +36,14 @@ No all-caps labels. No monospace anywhere, including data. No eyebrow labels abo
 Layout:
 - Content column max-width 72rem, everything left-aligned, 1.25rem side padding on mobile, 2.5rem on desktop.
 - Header: wordmark "fineants" (weight 700, 1rem, normal width) at left; nav links inline to the right as plain text; current page marked by a 2px `--ink` underline offset 6px, not colour alone.
-- The hero on Overview is the net position: one stamp figure per currency, stacked, each followed by a one-line sentence in body type describing the change since the previous snapshot in words ("Up $312.40 since Tuesday's sync", "No earlier snapshot to compare yet"). No gradient, no card, no icon.
+- The hero on Overview is the net position: one stamp figure per currency, stacked, set in `--ink` (never the semantic green/red; the boldness is scale and width), with the currency code in small `--ink-2` type beside it, each followed by a one-line sentence in body type describing the change since the previous snapshot in words ("Up $312.40 since Tuesday's sync", "No earlier snapshot to compare yet"). No gradient, no card, no icon. The change sentence comes from `src/lib/sentences.ts` and is reused on account detail.
 - Sections: a 3px `--ink` rule across the full content width, then the section title on the left and the section's one meta line on the right (e.g. "20 most recent", "last 365 days"), then the content. This rule is the only structural device. No other borders except 1px `--paper-2` row rules inside ledgers.
 - Ledgers replace cards everywhere: accounts, transactions, top payees, sync runs. Columns: text left, money right, dates right-aligned in a fixed-width column. Row hover: `--paper-2` background. Pending rows: amount in `--ochre` with the word "pending" in the date column, small type.
 - Account detail: stamp figure hero with the account's own change sentence, then balance chart, then ledger.
 - Forms (filters, settings): inputs with 1px `--ink-2` border, 2px radius, `--paper-2` background; buttons the same with weight 600; primary button filled `--cobalt` with `--paper` text. Keyboard focus: 2px `--cobalt` ring, 2px offset, everywhere.
 - Radius: 2px on inputs and buttons only. No shadows. No gradients. No icons in phase 1.
 
-Charts (Recharts): strokes in `--ink` for balance lines, bars in `--oxblood` (spent) and `--bottle` (received), no gradient fills, `--paper-2` horizontal grid only, axis text `--ink-2` 0.75rem, tooltip as a `--paper` plate with a 1px `--ink` border and tabular figures. Charts sit directly on the page under their section rule, no frame.
+Charts (Recharts): one chart per currency, stacked, each with its own axis and the currency named in a small line above it; never plot two currencies on one axis. Strokes in `--ink` for balance lines, bars in `--oxblood` (spent) and `--bottle` (received), no gradient fills, `--paper-2` horizontal grid only, axis text `--ink-2` 0.75rem, tooltip as a `--paper` plate with a 1px `--ink` border and tabular figures. Charts sit directly on the page under their section rule, no frame.
 
 Motion: none on load. Hover/focus transitions ≤ 120 ms, colour only. Respect `prefers-reduced-motion` (there is little to reduce). The Sync now button shows its state by changing its own label: "Sync now" → "Syncing…" → "Synced" (then a plain sentence of results beside it).
 

@@ -53,13 +53,19 @@ export function SyncButton() {
           setMsg(resultSentence(runs));
         }
         router.refresh();
-      } catch (e) {
-        setMsg(e instanceof Error ? e.message : String(e));
+      } catch {
+        // Covers both a refused request and a body that is not JSON; neither is worth quoting.
+        setMsg("Could not reach fineants. Check the server is running, then try again.");
       }
     });
 
   return (
     <div className="syncbar">
+      {/* The live region is always in the tree, and ahead of the button so that while it is
+          empty the button still sits flush with the content column's right edge. */}
+      <span className="small" role="status" aria-live="polite">
+        {msg}
+      </span>
       <button
         type="button"
         className="button button-primary"
@@ -69,7 +75,6 @@ export function SyncButton() {
       >
         {pending ? "Syncing…" : synced ? "Synced" : "Sync now"}
       </button>
-      {msg ? <span className="small">{msg}</span> : null}
     </div>
   );
 }
