@@ -1,11 +1,22 @@
 import { z } from "zod";
-import { parseAmountToCents } from "../money";
+import { MoneyParseError, parseAmountToCents } from "../money";
 import type { AccountSet, ErrItem, NormalisedAccount, NormalisedConnection, NormalisedTransaction } from "./types";
 
 export class SimpleFinParseError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
     this.name = "SimpleFinParseError";
+  }
+}
+
+function parseAmountOrThrow(value: string | number, context: string): number {
+  try {
+    return parseAmountToCents(value);
+  } catch (err) {
+    if (err instanceof MoneyParseError) {
+      throw new SimpleFinParseError(`${context} ${JSON.stringify(value)} is not a numeric amount`, { cause: err });
+    }
+    throw err;
   }
 }
 
@@ -93,7 +104,11 @@ export function parseAccountSet(json: unknown): AccountSet {
     if (a.conn_id) {
       connectionId = a.conn_id;
       if (!connections.has(connectionId)) {
-        connections.set(connectionId, { id: connectionId, name: connectionId, raw: {} });
+        connections.set(connectionId, {
+          id: connectionId,
+          name: "Unknown connection",
+          raw: { synthesized: true, conn_id: connectionId },
+        });
       }
     } else {
       const org = a.org ?? {};
@@ -114,7 +129,7 @@ export function parseAccountSet(json: unknown): AccountSet {
       id: t.id,
       posted: t.posted,
       transactedAt: t.transacted_at,
-      amountCents: parseAmountToCents(t.amount),
+      amountCents: parseAmountOrThrow(t.amount, `Transaction ${t.id} in account ${a.id}: amount`),
       description: t.description,
       payee: t.payee,
       memo: t.memo,
@@ -127,8 +142,11 @@ export function parseAccountSet(json: unknown): AccountSet {
       connectionId,
       name: a.name,
       currency: a.currency,
-      balanceCents: parseAmountToCents(a.balance),
-      availableBalanceCents: a["available-balance"] === undefined ? undefined : parseAmountToCents(a["available-balance"]),
+      balanceCents: parseAmountOrThrow(a.balance, `Account ${a.id}: balance`),
+      availableBalanceCents:
+        a["available-balance"] === undefined
+          ? undefined
+          : parseAmountOrThrow(a["available-balance"], `Account ${a.id}: available-balance`),
       balanceDate: a["balance-date"],
       transactions,
       raw: a,

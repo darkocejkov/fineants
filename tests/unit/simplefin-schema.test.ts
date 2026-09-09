@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseAccountSet, SimpleFinParseError } from "@/lib/simplefin/schema";
+import { MoneyParseError } from "@/lib/money";
 
 const load = (name: string) =>
   JSON.parse(readFileSync(path.join(__dirname, "..", "fixtures", "simplefin", name), "utf8"));
@@ -65,5 +66,68 @@ describe("parseAccountSet edge cases", () => {
   it("throws SimpleFinParseError on nonsense", () => {
     expect(() => parseAccountSet({ accounts: "nope" })).toThrow(SimpleFinParseError);
     expect(() => parseAccountSet(null)).toThrow(SimpleFinParseError);
+  });
+});
+
+describe("parseAccountSet review fixes", () => {
+  it("wraps a non-numeric account balance as SimpleFinParseError with a MoneyParseError cause", () => {
+    try {
+      parseAccountSet({ accounts: [{ id: "A", name: "n", currency: "CAD", balance: "N/A", "balance-date": 1, transactions: [] }] });
+      expect.fail("expected parseAccountSet to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(SimpleFinParseError);
+      expect((err as Error).message).toMatch(/balance/);
+      expect((err as Error).message).toMatch(/N\/A/);
+      expect((err as SimpleFinParseError).cause).toBeInstanceOf(MoneyParseError);
+    }
+  });
+
+  it("wraps a non-numeric transaction amount as SimpleFinParseError with a MoneyParseError cause", () => {
+    const call = () =>
+      parseAccountSet({
+        accounts: [
+          {
+            id: "ACC-1",
+            name: "n",
+            currency: "CAD",
+            balance: "0",
+            "balance-date": 1,
+            transactions: [{ id: "TX-9", posted: 1, amount: "x", description: "d" }],
+          },
+        ],
+      });
+    try {
+      call();
+      expect.fail("expected parseAccountSet to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(SimpleFinParseError);
+      expect((err as Error).message).toMatch(/amount/);
+      expect((err as Error).message).toMatch(/TX-9/);
+      expect((err as Error).message).toMatch(/ACC-1/);
+      expect((err as SimpleFinParseError).cause).toBeInstanceOf(MoneyParseError);
+    }
+  });
+
+  it("makes a synthesized connection visible when conn_id is undeclared", () => {
+    const set = parseAccountSet({
+      accounts: [
+        {
+          id: "A",
+          name: "n",
+          currency: "CAD",
+          balance: "0",
+          "balance-date": 1,
+          conn_id: "conn-missing",
+          transactions: [],
+        },
+      ],
+    });
+    const conn = set.connections.find((c) => c.id === "conn-missing")!;
+    expect(conn).toMatchObject({
+      id: "conn-missing",
+      name: "Unknown connection",
+      raw: { synthesized: true, conn_id: "conn-missing" },
+    });
+    expect(set.errlist).toEqual([]);
   });
 });
