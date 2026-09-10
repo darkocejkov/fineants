@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as schema from "./schema";
 import { loadConfig } from "../config";
+import { runDataSteps } from "./bootstrap";
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
@@ -25,7 +26,10 @@ const g = globalThis as unknown as { __fineantsDb?: Db };
 
 export function getDb(): Db {
   if (!g.__fineantsDb) {
-    g.__fineantsDb = createDb(loadConfig().databasePath);
+    const config = loadConfig();
+    const db = createDb(config.databasePath);
+    runDataSteps(db, { timezone: config.timezone });
+    g.__fineantsDb = db;
   }
   return g.__fineantsDb;
 }

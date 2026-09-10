@@ -1,12 +1,14 @@
 import "dotenv/config";
 import { loadConfig, requireAccessUrl } from "../src/lib/config";
 import { createDb } from "../src/lib/db/client";
+import { runDataSteps } from "../src/lib/db/bootstrap";
 import { runSync } from "../src/lib/sync/engine";
 
 async function main() {
   const config = loadConfig();
   const force = process.argv.includes("--force");
   const db = createDb(config.databasePath);
+  runDataSteps(db, { timezone: config.timezone });
   const result = await runSync({ db, accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays, timezone: config.timezone }, { trigger: "cli", force });
   if (result.skipped === "no_access_url") {
     // The engine reports a token; requireAccessUrl owns the sentence that tells a CLI user
