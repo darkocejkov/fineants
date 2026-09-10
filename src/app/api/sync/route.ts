@@ -11,7 +11,7 @@ export const POST = withApiErrors(async (req: Request) => {
   const auth = authorise(req, config, { allowSameOrigin: true });
   if (!auth.ok) return unauthorised(auth);
   const force = new URL(req.url).searchParams.get("force") === "1";
-  const result = await runSync({ db: getDb(), accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays }, { trigger: "manual", force });
+  const result = await runSync({ db: getDb(), accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays, timezone: config.timezone }, { trigger: "manual", force });
   if (result.skipped === "rate_limited") return Response.json(result, { status: 409 });
   if (result.skipped === "credentials_invalid") return Response.json(result, { status: 503 });
   if (result.skipped === "no_access_url") {

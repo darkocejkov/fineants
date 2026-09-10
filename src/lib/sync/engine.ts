@@ -6,6 +6,10 @@ import { deleteState, getState, setState, STATE_KEYS } from "../db/appState";
 import { fetchAccounts, SimpleFinAuthError } from "../simplefin/client";
 import type { AccountSet, ErrItem } from "../simplefin/types";
 import { computeWindows, type SyncWindow } from "./windows";
+import { toLocalDate } from "../time";
+import { attributeErrors } from "./attribution";
+import { sweepStaleRuns } from "./stale";
+import { advanceWatermark, ensureConnectionState, oldestWatermark, recordConnectionError } from "../queries/connectionState";
 
 export type SyncTrigger = "scheduled" | "manual" | "cli";
 export type SyncRunSummary = {
@@ -27,6 +31,7 @@ export type SyncDeps = {
   backfillDays: number;
   fetchImpl?: typeof fetch;
   now?: () => number;
+  timezone: string;
 };
 export type CredentialsInvalidState = { reason: string; accessUrlHash: string; at: string };
 
@@ -46,6 +51,8 @@ export async function runSync(deps: SyncDeps, opts: { trigger: SyncTrigger; forc
   const nowSec = Math.floor(nowMs / 1000);
   const force = opts.force ?? false;
 
+  sweepStaleRuns(db, nowMs);
+
   if (!deps.accessUrl) return { skipped: "no_access_url", runs: [] };
   const accessUrl = deps.accessUrl;
   const urlHash = hashAccessUrl(accessUrl);
@@ -61,7 +68,9 @@ export async function runSync(deps: SyncDeps, opts: { trigger: SyncTrigger; forc
     return { skipped: "rate_limited", runs: [] };
   }
 
-  const lastSuccessEnd = getState<number>(db, STATE_KEYS.lastSuccessfulSyncEnd) ?? null;
+  const globalEnd = getState<number>(db, STATE_KEYS.lastSuccessfulSyncEnd) ?? null;
+  const perConnection = oldestWatermark(db);
+  const lastSuccessEnd = perConnection === undefined ? globalEnd : perConnection;
   const windows = computeWindows(lastSuccessEnd, nowSec, deps.backfillDays);
   const runs: SyncRunSummary[] = [];
   const lastWindowEnd = windows[windows.length - 1]?.end;
@@ -138,9 +147,11 @@ async function syncWindow(
           .run();
 
         for (const t of a.transactions) {
+          const effectiveSec = t.posted !== 0 ? t.posted : (t.transactedAt ?? Math.floor(nowMs / 1000));
+          const localDate = toLocalDate(effectiveSec, deps.timezone);
           tx.insert(transactions)
-            .values({ id: t.id, accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), firstSeenAt: stamp, lastSeenAt: stamp })
-            .onConflictDoUpdate({ target: transactions.id, set: { accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), lastSeenAt: stamp } })
+            .values({ id: t.id, accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), firstSeenAt: stamp, lastSeenAt: stamp, localDate })
+            .onConflictDoUpdate({ target: transactions.id, set: { accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), lastSeenAt: stamp, localDate } })
             .run();
           upserted++;
         }
@@ -162,18 +173,32 @@ async function syncWindow(
           .run();
       }
 
+      const attribution = attributeErrors(accountSet.errlist, accountSet.connections);
       const status = accountSet.errlist.length ? "partial" : "success";
       tx.update(syncRuns)
-        .set({ status, finishedAt: stamp, httpStatus, accountsSeen: accountSet.accounts.length, transactionsUpserted: upserted, pendingRemoved: removed, errlist: JSON.stringify(accountSet.errlist), rawResponse: rawBody })
+        .set({ status, finishedAt: stamp, httpStatus, accountsSeen: accountSet.accounts.length, transactionsUpserted: upserted, pendingRemoved: removed, errlist: JSON.stringify(attribution.items), rawResponse: rawBody })
         .where(eq(syncRuns.id, run.id))
         .run();
+
+      // Per-connection watermarks: a connection advances unless an error was pinned on it (or on
+      // nobody, which pins it on everyone). New connections are seeded from the global watermark.
+      const seed = getState<number>(tx, STATE_KEYS.lastSuccessfulSyncEnd) ?? null;
+      for (const c of accountSet.connections) {
+        ensureConnectionState(tx, c.id, seed);
+        if (attribution.heldIds.has(c.id)) {
+          const err = attribution.items.find((e) => e.attributedConnectionId === c.id) ?? attribution.items.find((e) => !e.attributedConnectionId)!;
+          recordConnectionError(tx, c.id, err.code, err.msg, stamp);
+        } else {
+          advanceWatermark(tx, c.id, window.end);
+        }
+      }
       setState(tx, STATE_KEYS.lastSuccessfulSyncEnd, window.end);
       // The fetch succeeded, so whatever credentials we used are good — clear any stale flag.
       deleteState(tx, STATE_KEYS.credentialsInvalid);
-      return { status, upserted, removed } as const;
+      return { status, upserted, removed, errlist: attribution.items } as const;
     });
 
-    return { ...base, status: result.status, accountsSeen: accountSet.accounts.length, transactionsUpserted: result.upserted, pendingRemoved: result.removed, errlist: accountSet.errlist };
+    return { ...base, status: result.status, accountsSeen: accountSet.accounts.length, transactionsUpserted: result.upserted, pendingRemoved: result.removed, errlist: result.errlist };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     db.update(syncRuns).set({ status: "failed", finishedAt: stamp, error: message }).where(eq(syncRuns.id, run.id)).run();

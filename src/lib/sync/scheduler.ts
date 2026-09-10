@@ -2,6 +2,7 @@ import type { Db } from "../db/client";
 import type { Config } from "../config";
 import { getState, setState, STATE_KEYS } from "../db/appState";
 import { runSync } from "./engine";
+import { sweepStaleRuns } from "./stale";
 
 export type SchedulerDeps = {
   db: Db;
@@ -33,6 +34,8 @@ export function startScheduler(deps: SchedulerDeps): SchedulerHandle | null {
   if (config.syncIntervalHours <= 0) return null;
   if (g.__fineantsScheduler) return null;
 
+  sweepStaleRuns(db, now());
+
   let offset = getState<number>(db, STATE_KEYS.schedulerMinuteOffset);
   if (offset === undefined) {
     offset = Math.floor(Math.random() * 60);
@@ -46,7 +49,7 @@ export function startScheduler(deps: SchedulerDeps): SchedulerHandle | null {
   const execute = async (): Promise<void> => {
     try {
       const result = await run(
-        { db, accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays },
+        { db, accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays, timezone: config.timezone },
         { trigger: "scheduled" },
       );
       log(result.skipped ? `skipped: ${result.skipped}` : `completed ${result.runs.length} run(s): ${result.runs.map((r) => r.status).join(",")}`);

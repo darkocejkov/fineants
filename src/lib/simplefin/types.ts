@@ -1,4 +1,4 @@
-export type ErrItem = { code: string; msg: string; connId?: string; accountId?: string };
+export type ErrItem = { code: string; msg: string; connId?: string; accountId?: string; attributedConnectionId?: string };
 
 export type NormalisedConnection = {
   id: string;

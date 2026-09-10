@@ -1,0 +1,17 @@
+{
+  "errlist": [{ "code": "con.auth", "msg": "Please re-authenticate", "conn_id": "conn-td" }],
+  "connections": [
+    { "conn_id": "conn-td", "name": "TD Canada Trust", "org_id": "td", "org_url": "https://td.example", "sfin_url": "https://bridge.example/simplefin" },
+    { "conn_id": "conn-tang", "name": "Tangerine", "org_id": "tangerine", "org_url": "https://tangerine.example", "sfin_url": "https://bridge.example/simplefin" }
+  ],
+  "accounts": [
+    {
+      "id": "TD-CHQ", "name": "TD Chequing", "conn_id": "conn-td", "currency": "CAD", "balance": "1000.00", "balance-date": 1757400000,
+      "transactions": [{ "id": "TD-1", "posted": 1757300000, "amount": "-20.00", "description": "TD THING", "pending": false }]
+    },
+    {
+      "id": "TANG-SAV", "name": "Tangerine Savings", "conn_id": "conn-tang", "currency": "CAD", "balance": "5000.00", "balance-date": 1757400000,
+      "transactions": [{ "id": "TANG-1", "posted": 1757300000, "amount": "20.00", "description": "TANG THING", "pending": false }]
+    }
+  ]
+}

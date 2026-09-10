@@ -1,0 +1,15 @@
+{
+  "errors": ["Connection to TD Canada Trust may need attention. Auth required"],
+  "accounts": [
+    {
+      "org": { "domain": "td.example", "name": "TD Canada Trust", "sfin-url": "https://bridge.example/simplefin", "url": "https://td.example", "id": "org-td" },
+      "id": "TD-CHQ", "name": "TD Chequing", "currency": "CAD", "balance": "1000.00", "balance-date": 1757400000,
+      "transactions": [{ "id": "TD-1", "posted": 1757300000, "amount": "-20.00", "description": "TD THING", "payee": "TD", "memo": "" }]
+    },
+    {
+      "org": { "domain": "tangerine.example", "name": "Tangerine", "sfin-url": "https://bridge.example/simplefin", "url": "https://tangerine.example", "id": "org-tang" },
+      "id": "TANG-SAV", "name": "Tangerine Savings", "currency": "CAD", "balance": "5000.00", "balance-date": 1757400000,
+      "transactions": [{ "id": "TANG-1", "posted": 1757300000, "amount": "20.00", "description": "TANG THING", "payee": "Tangerine", "memo": "" }]
+    }
+  ]
+}

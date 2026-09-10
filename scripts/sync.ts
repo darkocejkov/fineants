@@ -7,7 +7,7 @@ async function main() {
   const config = loadConfig();
   const force = process.argv.includes("--force");
   const db = createDb(config.databasePath);
-  const result = await runSync({ db, accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays }, { trigger: "cli", force });
+  const result = await runSync({ db, accessUrl: config.simplefinAccessUrl, backfillDays: config.backfillDays, timezone: config.timezone }, { trigger: "cli", force });
   if (result.skipped === "no_access_url") {
     // The engine reports a token; requireAccessUrl owns the sentence that tells a CLI user
     // — the one surface with no UI to map it — what to do about it.
