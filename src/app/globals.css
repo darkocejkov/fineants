@@ -595,6 +595,10 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+.status-running {
+  color: var(--ink-2);
+}
+
 .status-success {
   color: var(--bottle);
 }

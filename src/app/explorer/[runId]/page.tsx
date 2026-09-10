@@ -14,6 +14,7 @@ type RawAccount = { id?: string; name?: string; transactions?: unknown[] } & Rec
 
 export default async function RunPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
+  if (!/^\d+$/.test(runId)) notFound();
   const id = Number(runId);
   if (!Number.isInteger(id)) notFound();
   const run = getSyncRun(getDb(), id);
@@ -102,7 +103,9 @@ export default async function RunPage({ params }: { params: Promise<{ runId: str
             </p>
           </div>
           {accounts.map((a, i) => {
-            const txCount = Array.isArray(a.transactions) ? a.transactions.length : 0;
+            const allTx = Array.isArray(a.transactions) ? a.transactions : [];
+            const txCount = allTx.length;
+            const shownTx = allTx.length > 200 ? allTx.slice(0, 200) : allTx;
             return (
               <details key={String(a.id ?? i)} className="disclosure">
                 <summary className="disclosure-summary">
@@ -115,7 +118,10 @@ export default async function RunPage({ params }: { params: Promise<{ runId: str
                   </div>
                   <details>
                     <summary className="disclosure-summary">Transactions</summary>
-                    <JsonView value={a.transactions ?? []} />
+                    {txCount > 200 ? (
+                      <p className="small">Showing 200 of {txCount} transactions. The full response is stored in the database.</p>
+                    ) : null}
+                    <JsonView value={shownTx} />
                   </details>
                 </div>
               </details>

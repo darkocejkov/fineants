@@ -9,6 +9,7 @@ import type { ErrItem } from "@/lib/simplefin/types";
 export const dynamic = "force-dynamic";
 
 const STATUS_CLASS: Record<string, string> = {
+  running: "status-running",
   success: "status-success",
   partial: "status-partial",
   failed: "status-failed",
