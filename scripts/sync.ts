@@ -29,6 +29,10 @@ async function main() {
     console.log(`run #${r.runId} ${r.status} ${w} accounts=${r.accountsSeen} tx=${r.transactionsUpserted} pendingRemoved=${r.pendingRemoved}${r.error ? ` error=${r.error}` : ""}`);
     for (const e of r.errlist) console.log(`  errlist ${e.code}: ${e.msg}`);
   }
+  if (result.tagging) {
+    const t = result.tagging;
+    console.log(`tagging categorised=${t.categorised} cleared=${t.categoryCleared} transfers=${t.transfersPaired} in ${t.durationMs}ms${t.invalidRules.length ? ` invalidRules=${t.invalidRules.map((r) => r.id).join(",")}` : ""}`);
+  }
   if (result.runs.some((r) => r.status === "failed")) process.exitCode = 1;
 }
 

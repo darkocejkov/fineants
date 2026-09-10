@@ -337,3 +337,25 @@ describe("runSync per-connection watermarks", () => {
     expect(swept).toMatchObject({ status: "failed", error: "interrupted" });
   });
 });
+
+describe("runSync tagging hook", () => {
+  it("runs the tagging pass after a sync that upserted rows and reports it", async () => {
+    const { db, d } = deps();
+    const r = await runSync(d, { trigger: "cli" });
+    expect(r.tagging).toBeDefined();
+    expect(r.tagging!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(getState(db, STATE_KEYS.lastTagging)).toBeDefined();
+  });
+  it("skips tagging when nothing was upserted", async () => {
+    // old-shape.json's attributed error holds its connection's watermark at null, which would
+    // force the second run back into a five-window full backfill. Use the healthy copy for both
+    // runs so the connection actually advances and the second run is a single window.
+    const { db, d } = deps(makeTestDb(), () => jsonResponse(oldShapeHealthy()));
+    await runSync(d, { trigger: "cli" });
+    const empty = oldShapeHealthy();
+    empty.accounts.forEach((a: { transactions: unknown[] }) => (a.transactions = []));
+    const r = await runSync({ ...d, fetchImpl: makeFetchMock(() => jsonResponse(empty)), now: () => NOW_MS + 7 * 3600 * 1000 }, { trigger: "cli" });
+    expect(r.tagging).toBeUndefined();
+    void db;
+  });
+});

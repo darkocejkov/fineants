@@ -39,3 +39,12 @@ export function seedBasic(db: Db) {
   ]).run();
   return { runId: run.id };
 }
+
+/** An outflow from CHQ and a matching inflow to USD-less account "SAV" one day later; both CAD. */
+export function seedTransferPair(db: Db) {
+  db.insert(accounts).values({ id: "SAV", connectionId: "org-1", name: "Savings", currency: "CAD", balanceCents: 0, balanceDate: day(0), raw: "{}", firstSeenAt: iso(30), lastSeenAt: iso(0) }).run();
+  db.insert(transactions).values([
+    { id: "xfer-out", accountId: "CHQ", posted: day(5), transactedAt: null, amountCents: -75000, description: "TRANSFER TO SAVINGS", payee: null, memo: null, pending: false, raw: "{}", firstSeenAt: iso(5), lastSeenAt: iso(0), localDate: iso(5).slice(0, 10) },
+    { id: "xfer-in", accountId: "SAV", posted: day(4), transactedAt: null, amountCents: 75000, description: "TRANSFER FROM CHEQUING", payee: null, memo: null, pending: false, raw: "{}", firstSeenAt: iso(4), lastSeenAt: iso(0), localDate: iso(4).slice(0, 10) },
+  ]).run();
+}

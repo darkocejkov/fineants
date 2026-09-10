@@ -10,6 +10,7 @@ import { toLocalDate } from "../time";
 import { attributeErrors } from "./attribution";
 import { sweepStaleRuns } from "./stale";
 import { advanceWatermark, ensureConnectionState, oldestWatermark, recordConnectionError } from "../queries/connectionState";
+import { applyTagging, type TaggingReport } from "../tagging/apply";
 
 export type SyncTrigger = "scheduled" | "manual" | "cli";
 export type SyncRunSummary = {
@@ -24,7 +25,7 @@ export type SyncRunSummary = {
   error?: string;
 };
 export type SyncSkipReason = "credentials_invalid" | "rate_limited" | "no_access_url";
-export type SyncResult = { skipped?: SyncSkipReason; runs: SyncRunSummary[] };
+export type SyncResult = { skipped?: SyncSkipReason; runs: SyncRunSummary[]; tagging?: TaggingReport };
 export type SyncDeps = {
   db: Db;
   accessUrl?: string;
@@ -81,7 +82,23 @@ export async function runSync(deps: SyncDeps, opts: { trigger: SyncTrigger; forc
     runs.push(summary);
     if (summary.status === "failed") break;
   }
-  return { runs };
+
+  const upserted = runs.reduce((n, r) => n + r.transactionsUpserted, 0);
+  if (upserted === 0) return { runs };
+  try {
+    const tagging = applyTagging(db, { now: deps.now });
+    return { runs, tagging };
+  } catch (err) {
+    // The bank data is stored; a tagging defect must not read as a sync failure.
+    const message = `tagging: ${err instanceof Error ? err.message : String(err)}`;
+    const last = runs.at(-1);
+    if (last && last.status !== "failed") {
+      db.update(syncRuns).set({ status: "partial", error: message }).where(eq(syncRuns.id, last.runId)).run();
+      last.status = "partial";
+      last.error = message;
+    }
+    return { runs };
+  }
 }
 
 async function syncWindow(
