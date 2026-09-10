@@ -13,7 +13,7 @@ export async function updateAccount(formData: FormData): Promise<void> {
   const type = (ACCOUNT_TYPES as readonly string[]).includes(typeRaw) ? (typeRaw as AccountType) : null;
 
   updateAccountSettings(getDb(), id, {
-    nickname: String(formData.get("nickname") ?? ""),
+    nickname: String(formData.get("nickname") ?? "").trim(),
     type,
     hidden: formData.get("hidden") === "on",
   });
@@ -22,6 +22,7 @@ export async function updateAccount(formData: FormData): Promise<void> {
   revalidatePath("/settings");
   revalidatePath("/transactions");
   revalidatePath("/spending");
+  revalidatePath(`/accounts/${encodeURIComponent(id)}`);
 
   // A cheap "Saved" acknowledgement beside the row's button, with no client state.
   redirect(`/settings?saved=${encodeURIComponent(id)}`);
