@@ -657,3 +657,17 @@ select {
   line-height: 1.5;
 }
 
+/* ---- settings: one ruled form per account, ledger-style row -------------- */
+
+/* Built on .filters (the field row layout); this overrides its spacing so
+   rows read as ruled ledger lines instead of a filter bar sitting above one. */
+.account-row {
+  margin-bottom: 0;
+  padding-block: 0.875rem;
+  border-bottom: 1px solid var(--paper-2);
+}
+
+.account-row:first-of-type {
+  padding-top: 0;
+}
+
