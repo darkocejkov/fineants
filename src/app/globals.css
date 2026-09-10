@@ -568,3 +568,88 @@ select {
   stroke: var(--cobalt);
 }
 
+/* ---- explorer: run metadata, status words, disclosures, raw json --------- */
+
+/* Run metadata as label/value pairs, two abreast on wider screens. */
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.375rem 1.5rem;
+}
+
+@media (min-width: 40rem) {
+  .facts {
+    grid-template-columns: auto 1fr auto 1fr;
+  }
+}
+
+.facts dt {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-success {
+  color: var(--bottle);
+}
+
+.status-partial {
+  color: var(--ochre);
+}
+
+.status-failed {
+  color: var(--oxblood);
+}
+
+/* The errors column can hold a long sentence or a list of codes; it truncates
+   to one line and carries the full text in the cell's title. */
+.ledger td.ledger-truncate {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Accounts replace cards with a plain disclosure list: one row rule per
+   account, no border around the expanded content. */
+.disclosure {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--paper-2);
+}
+
+.disclosure:first-of-type {
+  padding-top: 0;
+}
+
+.disclosure-summary {
+  cursor: pointer;
+}
+
+.disclosure-body {
+  margin-top: 0.75rem;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* The one deliberate exception to "no monospace anywhere": a raw payload is
+   code, not a data label, so it gets a monospace stack and its own quiet box. */
+.json {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--paper-2);
+  border-radius: 2px;
+  background: var(--paper-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
