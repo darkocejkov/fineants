@@ -311,7 +311,7 @@ same-origin requests from the Sync now button (checked via `Origin`/`Sec-Fetch-S
 - `POST /api/sync?force=1` → `runSync({ trigger: "manual", force })` → 200 with summary, or
   409 when skipped by the rate guard, 503 when credentials are invalid.
 - `GET /api/v1/summary` → `{ generatedAt, lastSync: {finishedAt, status}, totals: [{currency, balanceCents}], accounts: [{id, name, type, currency, balanceCents, balanceDate}] }` (non-hidden only).
-- `GET /api/v1/spending?range=today|7d|30d` → `{ range, currency, days: [{date, outflowCents, inflowCents}], topPayees: [...] }`.
+- `GET /api/v1/spending?range=today|7d|30d` → `{ range, days: [{date, currency, outflowCents, inflowCents}], topPayees: [{label, currency, outflowCents, count}] }` (per-row currency, since accounts may span currencies; amended 2026-09-09 at final review).
 
 Responses are JSON with cents as integers; formatting is the consumer's job.
 

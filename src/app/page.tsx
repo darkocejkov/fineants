@@ -7,7 +7,7 @@ import { getSyncStatus, type SyncStatus } from "@/lib/queries/syncRuns";
 import { unixToDate, relativeFromNow, isoToLocal } from "@/lib/format";
 import { changeSentence } from "@/lib/sentences";
 import { Amount } from "@/components/Amount";
-import { EmptyState } from "@/components/EmptyState";
+import { EmptyState, NoAccountsEmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { SyncButton } from "@/components/SyncButton";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
@@ -55,11 +55,7 @@ export default function OverviewPage() {
 
       {accounts.length === 0 ? (
         <section className="section">
-          <EmptyState title="No accounts yet">
-            Run <code>npm run claim</code> with your setup token, put the access URL it prints into{" "}
-            <code>SIMPLEFIN_ACCESS_URL</code> in <code>.env</code>, then choose Sync now. The{" "}
-            <Link href="/explorer">explorer</Link> shows the raw SimpleFin responses.
-          </EmptyState>
+          <NoAccountsEmptyState />
         </section>
       ) : (
         <>

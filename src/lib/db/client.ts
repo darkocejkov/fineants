@@ -10,10 +10,6 @@ export type Db = BetterSQLite3Database<typeof schema>;
 
 const DEFAULT_MIGRATIONS = path.join(process.cwd(), "src", "lib", "db", "migrations");
 
-export function nowIso(): string {
-  return new Date().toISOString();
-}
-
 export function createDb(dbPath: string, opts: { migrationsFolder?: string } = {}): Db {
   const isMemory = dbPath === ":memory:";
   if (!isMemory) fs.mkdirSync(path.dirname(dbPath), { recursive: true });

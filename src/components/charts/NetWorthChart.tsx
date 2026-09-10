@@ -1,19 +1,16 @@
 "use client";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { formatCents } from "@/lib/money";
+import {
+  CHART_MARGIN,
+  TOOLTIP_ITEM_STYLE,
+  TOOLTIP_LABEL_STYLE,
+  TOOLTIP_STYLE,
+  X_AXIS_PROPS,
+  Y_AXIS_PROPS,
+} from "./chartStyle";
 
 type Series = { currency: string; points: { date: string; balanceCents: number }[] };
-
-const TOOLTIP_STYLE = {
-  background: "var(--paper)",
-  border: "1px solid var(--ink)",
-  borderRadius: 0,
-  boxShadow: "none",
-  padding: "0.5rem 0.625rem",
-  fontSize: "0.8125rem",
-  lineHeight: 1.4,
-  fontVariantNumeric: "tabular-nums",
-} as const;
 
 // Currencies never share a scale: each gets its own chart and its own axis, named above it.
 function CurrencyChart({ series }: { series: Series }) {
@@ -22,22 +19,16 @@ function CurrencyChart({ series }: { series: Series }) {
     <div className="chart">
       <p className="chart-label">{series.currency}</p>
       <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <LineChart data={data} margin={CHART_MARGIN}>
           <CartesianGrid vertical={false} />
-          <XAxis dataKey="date" axisLine={false} tickLine={false} minTickGap={28} tickMargin={8} />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            width={72}
-            tickMargin={8}
-            tickFormatter={(v: number) => v.toLocaleString()}
-          />
+          <XAxis dataKey="date" {...X_AXIS_PROPS} />
+          <YAxis {...Y_AXIS_PROPS} />
           <Tooltip
             isAnimationActive={false}
             formatter={(v) => [formatCents(Math.round(Number(v) * 100), series.currency), series.currency]}
             contentStyle={TOOLTIP_STYLE}
-            labelStyle={{ color: "var(--ink-2)", marginBottom: "0.25rem" }}
-            itemStyle={{ color: "var(--ink)", padding: 0 }}
+            labelStyle={TOOLTIP_LABEL_STYLE}
+            itemStyle={TOOLTIP_ITEM_STYLE}
           />
           <Line
             type="monotone"

@@ -26,9 +26,23 @@ describe("buildSpending", () => {
   it("maps ranges to day windows", () => {
     const db = makeTestDb();
     seedBasic(db);
-    expect(buildSpending(db, "today", T0).days.filter((d) => d.currency === "CAD")).toEqual([{ period: "2026-09-09", currency: "CAD", outflowCents: 500, inflowCents: 0 }]);
+    expect(buildSpending(db, "today", T0).days.filter((d) => d.currency === "CAD")).toEqual([{ date: "2026-09-09", currency: "CAD", outflowCents: 500, inflowCents: 0 }]);
     expect(buildSpending(db, "7d", T0).days.filter((d) => d.currency === "CAD")).toHaveLength(4);
     expect(buildSpending(db, "30d", T0).topPayees[0].label).toBe("Gas");
+  });
+
+  // The payload is a published contract (README, spec §11, phase 3's Magic Frame), so the
+  // field *names* are asserted, not just the row count: `date`, not the query layer's `period`.
+  it("names every day row's fields date, currency, outflowCents, inflowCents", () => {
+    const db = makeTestDb();
+    seedBasic(db);
+    const payload = buildSpending(db, "7d", T0);
+    expect(Object.keys(payload)).toEqual(["range", "days", "topPayees"]);
+    expect(payload.days.length).toBeGreaterThan(0);
+    for (const day of payload.days) {
+      expect(Object.keys(day).sort()).toEqual(["currency", "date", "inflowCents", "outflowCents"]);
+      expect(day.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
   });
 
   it("keeps today's payees aligned to the UTC calendar day, not a rolling 24h window", () => {

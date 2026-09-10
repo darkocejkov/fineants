@@ -671,3 +671,15 @@ select {
   padding-top: 0;
 }
 
+/* ---- reduced motion ------------------------------------------------------ */
+
+/* The sheet's only motion is the 120 ms colour fade on links, ledger rows and buttons
+   (the charts already draw with animation off), so honouring the preference is exactly
+   that: drop the fade and keep every end state. Placed last so it outranks those rules. */
+@media (prefers-reduced-motion: reduce) {
+  a,
+  .button,
+  .ledger tbody tr {
+    transition: none;
+  }
+}

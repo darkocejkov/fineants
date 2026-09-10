@@ -1,30 +1,43 @@
 import { getDb } from "@/lib/db/client";
+import { first, type SearchParams } from "@/lib/searchParams";
 import { listAccounts } from "@/lib/queries/accounts";
 import { listTransactions, type TxFilter } from "@/lib/queries/transactions";
+import { NoAccountsEmptyState } from "@/components/EmptyState";
 import { TransactionFilters } from "@/components/TransactionFilters";
 import { TransactionsTable, Pagination } from "@/components/TransactionsTable";
 
 export const dynamic = "force-dynamic";
 
-type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || undefined;
-
-function filterFromParams(sp: SP): TxFilter {
+function filterFromParams(sp: SearchParams): TxFilter {
   return {
-    accountId: one(sp.account),
-    q: one(sp.q),
-    from: one(sp.from),
-    to: one(sp.to),
-    page: Number(one(sp.page) ?? 1) || 1,
+    accountId: first(sp.account),
+    q: first(sp.q),
+    from: first(sp.from),
+    to: first(sp.to),
+    page: Number(first(sp.page) ?? 1) || 1,
     pageSize: 50,
   };
 }
 
-export default async function TransactionsPage({ searchParams }: { searchParams: Promise<SP> }) {
+export default async function TransactionsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
   const db = getDb();
   const filter = filterFromParams(sp);
   const accounts = listAccounts(db, { includeHidden: true });
+
+  // No accounts at all means nothing has ever synced, so there is nothing to filter and
+  // nothing to page: advice about filters the user never set would be a dead end.
+  if (accounts.length === 0) {
+    return (
+      <section className="section section-lead">
+        <div className="section-head">
+          <h1 className="section-title">Transactions</h1>
+        </div>
+        <NoAccountsEmptyState />
+      </section>
+    );
+  }
+
   // Hidden accounts stay out of "All accounts" but are shown when one is picked on purpose.
   const { rows, total, page, pageSize } = listTransactions(db, { ...filter, includeHidden: Boolean(filter.accountId) });
   const params = { account: filter.accountId, q: filter.q, from: filter.from, to: filter.to };

@@ -101,5 +101,41 @@ describe("route handlers", () => {
       const res = await POST(req("http://localhost/api/sync", { method: "POST", headers: { "x-api-key": "k" } }));
       expect(res.status).toBe(503);
     });
+    it("503 with the claim instructions when the access URL is missing", async () => {
+      vi.mocked(runSync).mockResolvedValueOnce({ skipped: "no_access_url", runs: [] });
+      const res = await POST(req("http://localhost/api/sync", { method: "POST", headers: { "x-api-key": "k" } }));
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.skipped).toBe("no_access_url");
+      expect(body.message).toMatch(/npm run claim/);
+    });
+  });
+
+  describe("an unexpected throw", () => {
+    it("returns 500 'internal error' and logs the message, without the request or the URL", async () => {
+      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.mocked(runSync).mockRejectedValueOnce(new Error("SQLITE_CORRUPT: database disk image is malformed"));
+      const res = await POST(
+        req("http://localhost/api/sync", { method: "POST", headers: { "x-api-key": "k", "x-secret": "leak-me" } }),
+      );
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: "internal error" });
+      expect(logged).toHaveBeenCalledWith("[fineants api]", "SQLITE_CORRUPT: database disk image is malformed");
+      // One call, one message: no headers, no access URL, nothing else that could carry a secret.
+      expect(logged.mock.calls).toHaveLength(1);
+      expect(JSON.stringify(logged.mock.calls)).not.toContain("leak-me");
+      logged.mockRestore();
+    });
+    it("a ConfigError keeps its own message and is not logged", async () => {
+      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.mocked(loadConfig).mockImplementationOnce(() => {
+        throw new ConfigError("Invalid environment:\nBACKFILL_DAYS: must be a non-negative integer");
+      });
+      const res = await spendingGET(req("http://localhost/api/v1/spending", { headers: { "x-api-key": "k" } }));
+      expect(res.status).toBe(500);
+      expect((await res.json()).error).toMatch(/BACKFILL_DAYS/);
+      expect(logged).not.toHaveBeenCalled();
+      logged.mockRestore();
+    });
   });
 });

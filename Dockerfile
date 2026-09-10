@@ -21,7 +21,11 @@ COPY --from=build --chown=fineants:fineants /app/.next/standalone ./
 COPY --from=build --chown=fineants:fineants /app/.next/static ./.next/static
 COPY --from=build --chown=fineants:fineants /app/public ./public
 COPY --from=build --chown=fineants:fineants /app/src/lib/db/migrations ./migrations
-USER fineants
+# No USER line on purpose: the entrypoint starts as root so it can make a host-owned
+# ./data bind mount writable, then drops to fineants with setpriv (util-linux, already
+# in node:24-slim) before exec'ing the CMD. Adding `user:` to compose would pre-empt it.
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/
 EXPOSE 3000
 VOLUME ["/data"]
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]

@@ -50,7 +50,9 @@ export default function ExplorerPage() {
                   </th>
                   <th scope="col">Trigger</th>
                   <th scope="col">Status</th>
-                  <th scope="col">Window</th>
+                  <th scope="col" className="ledger-date">
+                    Window
+                  </th>
                   <th scope="col" className="ledger-num">
                     Accounts
                   </th>
@@ -76,7 +78,7 @@ export default function ExplorerPage() {
                       <td className="ledger-date">{isoToLocal(r.startedAt)}</td>
                       <td className="ledger-quiet">{r.trigger}</td>
                       <td className={STATUS_CLASS[r.status] ?? ""}>{r.status}</td>
-                      <td>
+                      <td className="ledger-date">
                         {unixToDate(r.windowStart)} to {unixToDate(r.windowEnd)}
                       </td>
                       <td className="ledger-num">{r.accountsSeen}</td>

@@ -193,3 +193,40 @@ describe("runSync guards and failures", () => {
     expect(r2.skipped).toBeUndefined();
   });
 });
+
+describe("runSync when the database phase throws", () => {
+  it("marks the run failed rather than leaving it running, and stops the loop", async () => {
+    const real = makeTestDb();
+    // The run row is inserted before the fetch and outside the transaction, so a throw inside
+    // the transaction rolls back the writes while the row survives. Everything but
+    // `transaction` reaches the real database, which is where the row is then read back from.
+    const throwing = new Proxy(real, {
+      get(target, prop) {
+        if (prop === "transaction") {
+          return () => {
+            throw new Error("database or disk is full");
+          };
+        }
+        const value = Reflect.get(target, prop) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as typeof real;
+
+    const fetchImpl = makeFetchMock(() => jsonResponse(fixture("old-shape.json")));
+    const r = await runSync({ db: throwing, accessUrl: ACCESS, backfillDays: 365, fetchImpl, now: () => NOW_MS }, { trigger: "cli" });
+
+    expect(r.runs).toHaveLength(1); // the failure stops the remaining four windows
+    expect(r.runs[0]).toMatchObject({ status: "failed", error: "database or disk is full" });
+    expect(fetchImpl.calls).toHaveLength(1);
+
+    const rows = real.select().from(syncRuns).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("failed");
+    expect(rows[0].finishedAt).toBe(new Date(NOW_MS).toISOString());
+    expect(rows[0].error).toBe("database or disk is full");
+    // Rolled back: no account, transaction or snapshot survived the failed transaction.
+    expect(real.select().from(accounts).all()).toHaveLength(0);
+    expect(real.select().from(balanceSnapshots).all()).toHaveLength(0);
+    expect(getState(real, STATE_KEYS.lastSuccessfulSyncEnd)).toBeUndefined();
+  });
+});

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db/client";
+import { first, type SearchParams } from "@/lib/searchParams";
 import { listAccounts } from "@/lib/queries/accounts";
 import { ACCOUNT_TYPES } from "@/lib/db/schema";
 import { loadConfig } from "@/lib/config";
@@ -9,12 +10,9 @@ import { updateAccount } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || undefined;
-
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<SP> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
-  const saved = one(sp.saved);
+  const saved = first(sp.saved);
   const db = getDb();
   const config = loadConfig();
   const accounts = listAccounts(db, { includeHidden: true });

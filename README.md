@@ -24,20 +24,29 @@ docker compose up -d --build
 ```
 Data lives in `./data/fineants.db`. Back that file up. The scheduler runs inside the container every `SYNC_INTERVAL_HOURS` at a fixed random minute.
 
+The container starts as root only long enough to make `/data` writable by its own user, then drops privileges. Under a runtime that forbids root, run it with `--user` and make `./data` writable by that uid yourself.
+
 ## API
 
 All routes need header `x-api-key: $API_KEY`.
 
 - `POST /api/sync[?force=1]` — run a sync now (409 if one ran under 30 minutes ago, 503 if credentials are invalid or missing).
 - `GET /api/v1/summary` — balances per account and per currency, last sync status. Amounts are integer cents.
-- `GET /api/v1/spending?range=today|7d|30d` — daily outflow/inflow and top payees.
+- `GET /api/v1/spending?range=today|7d|30d` — daily outflow/inflow and top payees, one row per UTC day per currency:
+  ```json
+  {
+    "range": "7d",
+    "days": [{ "date": "2026-09-09", "currency": "CAD", "outflowCents": 4210, "inflowCents": 0 }],
+    "topPayees": [{ "label": "Gas", "currency": "CAD", "outflowCents": 8800, "count": 2 }]
+  }
+  ```
 
 ## Scripts
 
 | command | purpose |
 | --- | --- |
 | `npm run claim -- <token>` | exchange a setup token for an access URL |
-| `npm run sync [-- --force]` | sync from the CLI; exits non-zero if the run fails or credentials are invalid |
+| `npm run sync [-- --force]` | sync from the CLI; exits non-zero if the run fails or the access URL is missing or invalid |
 | `npm run db:generate` | create a migration after editing `src/lib/db/schema.ts` |
 | `npm test` | Vitest (no network) |
 

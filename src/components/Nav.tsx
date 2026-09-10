@@ -19,7 +19,10 @@ export function Nav() {
       </Link>
       <nav className="navlinks">
         {links.map(([href, label]) => {
-          const current = path === href || (href !== "/" && path.startsWith(href));
+          // An account page has no nav item of its own, and it is reached from Overview's
+          // account list, so Overview keeps the underline while you are looking at one.
+          const current =
+            path === href || (href !== "/" && path.startsWith(href)) || (href === "/" && path.startsWith("/accounts/"));
           return (
             <Link
               key={href}

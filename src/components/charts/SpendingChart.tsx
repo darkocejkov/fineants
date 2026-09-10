@@ -2,18 +2,14 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { formatCents } from "@/lib/money";
 import type { PeriodTotals } from "@/lib/queries/spending";
-
-// The same plate as the balance tooltips: paper, one ink hairline, tabular figures.
-const TOOLTIP_STYLE = {
-  background: "var(--paper)",
-  border: "1px solid var(--ink)",
-  borderRadius: 0,
-  boxShadow: "none",
-  padding: "0.5rem 0.625rem",
-  fontSize: "0.8125rem",
-  lineHeight: 1.4,
-  fontVariantNumeric: "tabular-nums",
-} as const;
+import {
+  CHART_MARGIN,
+  TOOLTIP_ITEM_STYLE,
+  TOOLTIP_LABEL_STYLE,
+  TOOLTIP_STYLE,
+  X_AXIS_PROPS,
+  Y_AXIS_PROPS,
+} from "./chartStyle";
 
 /**
  * One currency, two bars per period: spent and received.
@@ -34,16 +30,10 @@ export function SpendingChart({ rows, currency }: { rows: PeriodTotals[]; curren
         <span className="chart-key-out">Spent</span> and <span className="chart-key-in">received</span> in {currency}
       </p>
       <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <BarChart data={data} margin={CHART_MARGIN}>
           <CartesianGrid vertical={false} />
-          <XAxis dataKey="period" axisLine={false} tickLine={false} minTickGap={28} tickMargin={8} />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            width={72}
-            tickMargin={8}
-            tickFormatter={(v: number) => v.toLocaleString()}
-          />
+          <XAxis dataKey="period" {...X_AXIS_PROPS} />
+          <YAxis {...Y_AXIS_PROPS} />
           <Tooltip
             isAnimationActive={false}
             separator=" "
@@ -52,8 +42,8 @@ export function SpendingChart({ rows, currency }: { rows: PeriodTotals[]; curren
             cursor={{ fill: "none" }}
             formatter={(v, name) => [formatCents(Math.round(Number(v) * 100), currency), String(name)]}
             contentStyle={TOOLTIP_STYLE}
-            labelStyle={{ color: "var(--ink-2)", marginBottom: "0.25rem" }}
-            itemStyle={{ color: "var(--ink)", padding: 0 }}
+            labelStyle={TOOLTIP_LABEL_STYLE}
+            itemStyle={TOOLTIP_ITEM_STYLE}
           />
           {/* No radius: the sheet rounds inputs and buttons only. maxBarSize keeps a 7-day
               range from drawing seven poster-width slabs. */}

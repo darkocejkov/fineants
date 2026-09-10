@@ -116,57 +116,67 @@ async function syncWindow(
     return { ...base, status: "failed", error: message };
   }
 
-  const result = db.transaction((tx) => {
-    for (const c of accountSet.connections) {
-      tx.insert(connections)
-        .values({ id: c.id, name: c.name, domain: c.domain, url: c.url, sfinUrl: c.sfinUrl, raw: JSON.stringify(c.raw), firstSeenAt: stamp, lastSeenAt: stamp })
-        .onConflictDoUpdate({ target: connections.id, set: { name: c.name, domain: c.domain, url: c.url, sfinUrl: c.sfinUrl, raw: JSON.stringify(c.raw), lastSeenAt: stamp } })
-        .run();
-    }
-
-    let upserted = 0;
-    let removed = 0;
-    for (const a of accountSet.accounts) {
-      tx.insert(accounts)
-        .values({ id: a.id, connectionId: a.connectionId, name: a.name, currency: a.currency, balanceCents: a.balanceCents, availableBalanceCents: a.availableBalanceCents ?? null, balanceDate: a.balanceDate, raw: JSON.stringify(a.raw), firstSeenAt: stamp, lastSeenAt: stamp })
-        .onConflictDoUpdate({ target: accounts.id, set: { connectionId: a.connectionId, name: a.name, currency: a.currency, balanceCents: a.balanceCents, availableBalanceCents: a.availableBalanceCents ?? null, balanceDate: a.balanceDate, raw: JSON.stringify(a.raw), lastSeenAt: stamp } })
-        .run();
-
-      for (const t of a.transactions) {
-        tx.insert(transactions)
-          .values({ id: t.id, accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), firstSeenAt: stamp, lastSeenAt: stamp })
-          .onConflictDoUpdate({ target: transactions.id, set: { accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), lastSeenAt: stamp } })
+  // The run row was inserted before the fetch, outside this transaction, so a throw in here
+  // rolls back the writes but leaves the row `running` — which reads as "still running" on the
+  // overview forever and wedges the rate guard, since the guard takes the newest run whatever
+  // its status. Marking it `failed` has to happen after the rollback, on `db` rather than `tx`.
+  try {
+    const result = db.transaction((tx) => {
+      for (const c of accountSet.connections) {
+        tx.insert(connections)
+          .values({ id: c.id, name: c.name, domain: c.domain, url: c.url, sfinUrl: c.sfinUrl, raw: JSON.stringify(c.raw), firstSeenAt: stamp, lastSeenAt: stamp })
+          .onConflictDoUpdate({ target: connections.id, set: { name: c.name, domain: c.domain, url: c.url, sfinUrl: c.sfinUrl, raw: JSON.stringify(c.raw), lastSeenAt: stamp } })
           .run();
-        upserted++;
       }
 
-      const seenIds = a.transactions.map((t) => t.id);
-      // A pending transaction's "effective" date is its transacted_at if known, else its
-      // posted date (posted === 0 means "no date yet", so nullif turns that into NULL too).
-      const effective = sql`coalesce(${transactions.transactedAt}, nullif(${transactions.posted}, 0))`;
-      const reconcileWindow = isLatestWindow
-        ? sql`((${effective} is not null and ${effective} >= ${window.start} and ${effective} < ${window.end}) or ${effective} is null)`
-        : sql`(${effective} is not null and ${effective} >= ${window.start} and ${effective} < ${window.end})`;
-      const where = seenIds.length
-        ? and(eq(transactions.accountId, a.id), eq(transactions.pending, true), notInArray(transactions.id, seenIds), reconcileWindow)
-        : and(eq(transactions.accountId, a.id), eq(transactions.pending, true), reconcileWindow);
-      removed += tx.delete(transactions).where(where).run().changes;
+      let upserted = 0;
+      let removed = 0;
+      for (const a of accountSet.accounts) {
+        tx.insert(accounts)
+          .values({ id: a.id, connectionId: a.connectionId, name: a.name, currency: a.currency, balanceCents: a.balanceCents, availableBalanceCents: a.availableBalanceCents ?? null, balanceDate: a.balanceDate, raw: JSON.stringify(a.raw), firstSeenAt: stamp, lastSeenAt: stamp })
+          .onConflictDoUpdate({ target: accounts.id, set: { connectionId: a.connectionId, name: a.name, currency: a.currency, balanceCents: a.balanceCents, availableBalanceCents: a.availableBalanceCents ?? null, balanceDate: a.balanceDate, raw: JSON.stringify(a.raw), lastSeenAt: stamp } })
+          .run();
 
-      tx.insert(balanceSnapshots)
-        .values({ accountId: a.id, syncRunId: run.id, balanceCents: a.balanceCents, availableBalanceCents: a.availableBalanceCents ?? null, balanceDate: a.balanceDate, recordedAt: stamp })
+        for (const t of a.transactions) {
+          tx.insert(transactions)
+            .values({ id: t.id, accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), firstSeenAt: stamp, lastSeenAt: stamp })
+            .onConflictDoUpdate({ target: transactions.id, set: { accountId: a.id, posted: t.posted, transactedAt: t.transactedAt ?? null, amountCents: t.amountCents, description: t.description, payee: t.payee ?? null, memo: t.memo ?? null, pending: t.pending, raw: JSON.stringify(t.raw), lastSeenAt: stamp } })
+            .run();
+          upserted++;
+        }
+
+        const seenIds = a.transactions.map((t) => t.id);
+        // A pending transaction's "effective" date is its transacted_at if known, else its
+        // posted date (posted === 0 means "no date yet", so nullif turns that into NULL too).
+        const effective = sql`coalesce(${transactions.transactedAt}, nullif(${transactions.posted}, 0))`;
+        const reconcileWindow = isLatestWindow
+          ? sql`((${effective} is not null and ${effective} >= ${window.start} and ${effective} < ${window.end}) or ${effective} is null)`
+          : sql`(${effective} is not null and ${effective} >= ${window.start} and ${effective} < ${window.end})`;
+        const where = seenIds.length
+          ? and(eq(transactions.accountId, a.id), eq(transactions.pending, true), notInArray(transactions.id, seenIds), reconcileWindow)
+          : and(eq(transactions.accountId, a.id), eq(transactions.pending, true), reconcileWindow);
+        removed += tx.delete(transactions).where(where).run().changes;
+
+        tx.insert(balanceSnapshots)
+          .values({ accountId: a.id, syncRunId: run.id, balanceCents: a.balanceCents, availableBalanceCents: a.availableBalanceCents ?? null, balanceDate: a.balanceDate, recordedAt: stamp })
+          .run();
+      }
+
+      const status = accountSet.errlist.length ? "partial" : "success";
+      tx.update(syncRuns)
+        .set({ status, finishedAt: stamp, httpStatus, accountsSeen: accountSet.accounts.length, transactionsUpserted: upserted, pendingRemoved: removed, errlist: JSON.stringify(accountSet.errlist), rawResponse: rawBody })
+        .where(eq(syncRuns.id, run.id))
         .run();
-    }
+      setState(tx, STATE_KEYS.lastSuccessfulSyncEnd, window.end);
+      // The fetch succeeded, so whatever credentials we used are good — clear any stale flag.
+      deleteState(tx, STATE_KEYS.credentialsInvalid);
+      return { status, upserted, removed } as const;
+    });
 
-    const status = accountSet.errlist.length ? "partial" : "success";
-    tx.update(syncRuns)
-      .set({ status, finishedAt: stamp, httpStatus, accountsSeen: accountSet.accounts.length, transactionsUpserted: upserted, pendingRemoved: removed, errlist: JSON.stringify(accountSet.errlist), rawResponse: rawBody })
-      .where(eq(syncRuns.id, run.id))
-      .run();
-    setState(tx, STATE_KEYS.lastSuccessfulSyncEnd, window.end);
-    // The fetch succeeded, so whatever credentials we used are good — clear any stale flag.
-    deleteState(tx, STATE_KEYS.credentialsInvalid);
-    return { status, upserted, removed } as const;
-  });
-
-  return { ...base, status: result.status, accountsSeen: accountSet.accounts.length, transactionsUpserted: result.upserted, pendingRemoved: result.removed, errlist: accountSet.errlist };
+    return { ...base, status: result.status, accountsSeen: accountSet.accounts.length, transactionsUpserted: result.upserted, pendingRemoved: result.removed, errlist: accountSet.errlist };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    db.update(syncRuns).set({ status: "failed", finishedAt: stamp, error: message }).where(eq(syncRuns.id, run.id)).run();
+    return { ...base, status: "failed", error: message };
+  }
 }

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db/client";
+import { first, type SearchParams } from "@/lib/searchParams";
+import { listAccounts } from "@/lib/queries/accounts";
 import { spendingByPeriod, topPayees, type Granularity } from "@/lib/queries/spending";
 import { unixToDate } from "@/lib/format";
 import { Amount } from "@/components/Amount";
-import { EmptyState } from "@/components/EmptyState";
+import { EmptyState, NoAccountsEmptyState } from "@/components/EmptyState";
 import { SpendingChart } from "@/components/charts/SpendingChart";
 
 export const dynamic = "force-dynamic";
@@ -25,30 +27,29 @@ const PERIOD_WORDS: Record<Granularity, { one: string; many: string }> = {
   month: { one: "month", many: "months" },
 };
 
-type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || undefined;
-
 /** The first day the queries count, printed for the meta line. The clock stays out of render. */
 function rangeStart(days: number): string {
   return unixToDate(Math.floor(Date.now() / 1000) - days * 86400);
 }
 
-export default async function SpendingPage({ searchParams }: { searchParams: Promise<SP> }) {
+export default async function SpendingPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
-  const rangeParam = one(sp.range);
+  const rangeParam = first(sp.range);
   const rangeKey: RangeKey = rangeParam && rangeParam in RANGES ? (rangeParam as RangeKey) : "30d";
   const range = RANGES[rangeKey];
-  const gParam = one(sp.g) as Granularity | undefined;
+  const gParam = first(sp.g) as Granularity | undefined;
   const granularity: Granularity = gParam && GRANULARITIES.includes(gParam) ? gParam : range.g;
 
   const db = getDb();
+  // Nothing has ever synced, so the range selector cannot be widened into any data.
+  const neverSynced = listAccounts(db, { includeHidden: true }).length === 0;
   const since = rangeStart(range.days);
   const all = spendingByPeriod(db, { days: range.days, granularity });
   const currencies = [...new Set(all.map((r) => r.currency))];
   const outflowByCurrency = new Map<string, number>();
   for (const r of all) outflowByCurrency.set(r.currency, (outflowByCurrency.get(r.currency) ?? 0) + r.outflowCents);
   const largestOutflow = [...outflowByCurrency.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const currencyParam = one(sp.currency);
+  const currencyParam = first(sp.currency);
   const currency = currencyParam && currencies.includes(currencyParam) ? currencyParam : largestOutflow;
 
   const rows = all.filter((r) => r.currency === currency);
@@ -131,6 +132,8 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
               <Amount cents={totalIn - totalOut} currency={currency} signColour={false} />, over {range.words}.
             </p>
           </>
+        ) : neverSynced ? (
+          <NoAccountsEmptyState />
         ) : (
           <EmptyState title="No transactions in this range.">Sync first, or choose a longer range.</EmptyState>
         )}
@@ -190,7 +193,7 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
           <p className="footnote">
             Transfers between your own accounts and credit-card payments are counted as spending for now. Transfer
             detection and categories arrive in phase 2. Hidden accounts are excluded. Periods with no activity are left
-            out of the chart.
+            out of the chart. Days and dates are in UTC.
           </p>
         </>
       ) : null}
