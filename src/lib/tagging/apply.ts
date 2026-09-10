@@ -126,13 +126,19 @@ export function applyTagging(db: Db, opts: { now?: () => number } = {}): Tagging
       desired.set(row.id, d);
     }
 
-    // 6.2 transfers: drop every auto pairing, then recompute among rows nobody pinned.
-    for (const [, d] of desired) {
-      if (d.transferSource === "auto") {
-        d.isTransfer = false;
-        d.transferSource = null;
-        d.counterpartTransactionId = null;
-      }
+    // 6.2 transfers: drop every auto pairing, except one whose partner has been manually pinned
+    // as a transfer pointing back at it — that pair is confirmed, not stale, and the partner is
+    // excluded from re-pairing below (transferSource === "manual"), so an unconditional drop
+    // would orphan this row with nothing left to re-pair with. Recompute the rest among rows
+    // nobody pinned.
+    for (const [id, d] of desired) {
+      if (d.transferSource !== "auto") continue;
+      const partner = d.counterpartTransactionId ? desired.get(d.counterpartTransactionId) : undefined;
+      const partnerConfirmsPair = partner?.transferSource === "manual" && partner.counterpartTransactionId === id;
+      if (partnerConfirmsPair) continue;
+      d.isTransfer = false;
+      d.transferSource = null;
+      d.counterpartTransactionId = null;
     }
     const candidates = rows.filter((r) => {
       const d = desired.get(r.id)!;

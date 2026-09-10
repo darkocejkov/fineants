@@ -35,8 +35,11 @@ export function clearCategoryOverride(db: Db, transactionId: string, nowIso = no
 export function setTransfer(db: Db, transactionId: string, isTransfer: boolean, nowIso = now()): void {
   const m = getMeta(db, transactionId);
   db.transaction((tx) => {
-    // Free an auto partner so the next pass can re-pair it with something else.
-    if (m?.counterpartTransactionId && m.transferSource === "auto") {
+    // Unmarking a transfer frees an auto partner so the next pass can re-pair it with something
+    // else. Pinning `true` on a row that already has an auto counterpart must NOT free that
+    // partner: the pair is confirmed, not broken, so both sides stay intact — the partner keeps
+    // pointing back at this row and keeps its own (auto) source.
+    if (!isTransfer && m?.counterpartTransactionId && m.transferSource === "auto") {
       upsertMeta(tx, m.counterpartTransactionId, { isTransfer: false, transferSource: null, counterpartTransactionId: null }, nowIso);
     }
     upsertMeta(tx, transactionId, { isTransfer, transferSource: "manual", counterpartTransactionId: isTransfer ? (m?.counterpartTransactionId ?? null) : null }, nowIso);

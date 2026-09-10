@@ -100,6 +100,14 @@ describe("applyTagging transfers", () => {
     applyTagging(db);
     expect(getMeta(db, "t4")).toMatchObject({ isTransfer: true, transferSource: "manual" });
   });
+  it("pinning an already-auto-paired row as a transfer keeps the pair intact", () => {
+    applyTagging(db);
+    setTransfer(db, "xfer-out", true);
+    const r = applyTagging(db);
+    expect(getMeta(db, "xfer-out")).toMatchObject({ isTransfer: true, transferSource: "manual", counterpartTransactionId: "xfer-in" });
+    expect(getMeta(db, "xfer-in")).toMatchObject({ isTransfer: true, counterpartTransactionId: "xfer-out" });
+    expect(r.transfersCleared).toBe(0);
+  });
   it("a rule marking transfers takes the row out of auto pairing", () => {
     createRule(db, { field: "any", match: "contains", pattern: "TRANSFER TO", markTransfer: true });
     const r = applyTagging(db);
