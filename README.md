@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# fineants
 
-## Getting Started
+Personal finance dashboard fed by [SimpleFin Bridge](https://beta-bridge.simplefin.org). Syncs accounts and transactions into a local SQLite file on a schedule, shows balances, net worth, transactions and spending, and exposes a small JSON API for a Magic Frame display.
 
-First, run the development server:
+## Setup
+
+1. `cp .env.example .env` and generate an API key: `openssl rand -hex 32`.
+2. Get a **setup token** from SimpleFin Bridge, then exchange it once:
+   ```bash
+   npm install
+   npm run claim -- <setup-token>
+   ```
+   Paste the printed `SIMPLEFIN_ACCESS_URL=…` line into `.env`. The setup token is dead after this; the access URL is the credential. Keep it private.
+3. First sync (about 5 requests for a year of history):
+   ```bash
+   npm run sync
+   ```
+4. Run the app: `npm run dev` and open http://localhost:3000.
+
+## Docker (home server)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker compose up -d --build
 ```
+Data lives in `./data/fineants.db`. Back that file up. The scheduler runs inside the container every `SYNC_INTERVAL_HOURS` at a fixed random minute.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## API
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+All routes need header `x-api-key: $API_KEY`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `POST /api/sync[?force=1]` — run a sync now (409 if one ran under 30 minutes ago, 503 if credentials are invalid or missing).
+- `GET /api/v1/summary` — balances per account and per currency, last sync status. Amounts are integer cents.
+- `GET /api/v1/spending?range=today|7d|30d` — daily outflow/inflow and top payees.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| command | purpose |
+| --- | --- |
+| `npm run claim -- <token>` | exchange a setup token for an access URL |
+| `npm run sync [-- --force]` | sync from the CLI; exits non-zero if the run fails or credentials are invalid |
+| `npm run db:generate` | create a migration after editing `src/lib/db/schema.ts` |
+| `npm test` | Vitest (no network) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- SimpleFin limits each request to 90 days and asks for ≤24 requests/day. fineants overlaps windows by 5 days and refuses to sync twice within 30 minutes unless forced.
+- Transfers between your own accounts count as spending until phase 2 adds transfer detection.
+- The dashboard has no login; keep it on your LAN or behind your own reverse-proxy auth.
+- The dashboard's design and the phase 2/3 roadmap are documented under `docs/superpowers/specs/`.

@@ -1,0 +1,12 @@
+services:
+  fineants:
+    build: .
+    container_name: fineants
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/fineants.db
+    volumes:
+      - ./data:/data
