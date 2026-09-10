@@ -322,6 +322,12 @@ describe("runSync per-connection watermarks", () => {
     const first = new URL(fetchImpl.calls[0].url);
     expect(Number(first.searchParams.get("start-date"))).toBe(Math.floor(NOW_MS / 1000) - 5 * DAY);
     expect(db.select().from(connectionSyncState).all()).toHaveLength(3);
+    // Verify the seeding design: new connections get the global watermark, not null.
+    // conn-tang is healthy so it advances to the new window end; conn-td has an attributed error
+    // so it is held at the seeded value (the global watermark from run 1).
+    const states = Object.fromEntries(db.select().from(connectionSyncState).all().map((s) => [s.connectionId, s]));
+    expect(states["conn-tang"].lastSuccessEnd).toBe(Math.floor(later / 1000));
+    expect(states["conn-td"].lastSuccessEnd).toBe(Math.floor(NOW_MS / 1000));
   });
   it("sweeps a stale running row before starting", async () => {
     const { db, d } = deps();
