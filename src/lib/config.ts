@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_TIMEZONE, isValidTimeZone } from "./time";
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -37,6 +38,14 @@ const envSchema = z.object({
   BACKFILL_DAYS: nonNegativeInt(365),
   API_KEY: optionalString,
   PORT: nonNegativeInt(3000),
+  TIMEZONE: optionalString.transform((v, ctx) => {
+    const tz = v ?? DEFAULT_TIMEZONE;
+    if (!isValidTimeZone(tz)) {
+      ctx.addIssue({ code: "custom", message: `must be an IANA timezone such as America/Toronto, got ${JSON.stringify(v)}` });
+      return z.NEVER;
+    }
+    return tz;
+  }),
 });
 
 export type Config = {
@@ -47,6 +56,7 @@ export type Config = {
   backfillDays: number;
   apiKey?: string;
   port: number;
+  timezone: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -64,6 +74,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     backfillDays: e.BACKFILL_DAYS,
     apiKey: e.API_KEY,
     port: e.PORT,
+    timezone: e.TIMEZONE,
   };
 }
 

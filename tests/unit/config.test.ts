@@ -53,3 +53,15 @@ describe("require helpers", () => {
     expect(requireApiKey(c)).toBe("k");
   });
 });
+
+describe("TIMEZONE", () => {
+  it("defaults to America/Toronto", () => {
+    expect(loadConfig({}).timezone).toBe("America/Toronto");
+  });
+  it("accepts a valid zone and trims it", () => {
+    expect(loadConfig({ TIMEZONE: " UTC " }).timezone).toBe("UTC");
+  });
+  it("rejects an unknown zone with a ConfigError naming the variable", () => {
+    expect(() => loadConfig({ TIMEZONE: "Mars/Olympus" })).toThrow(/TIMEZONE/);
+  });
+});

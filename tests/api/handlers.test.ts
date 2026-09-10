@@ -23,7 +23,7 @@ import { POST } from "@/app/api/sync/route";
 import { GET as summaryGET } from "@/app/api/v1/summary/route";
 import { GET as spendingGET } from "@/app/api/v1/spending/route";
 
-const baseConfig = { apiKey: "k", databasePath: ":memory:", syncIntervalHours: 6, backfillDays: 365, port: 3000 };
+const baseConfig = { apiKey: "k", databasePath: ":memory:", syncIntervalHours: 6, backfillDays: 365, port: 3000, timezone: "America/Toronto" };
 
 const req = (url: string, init?: RequestInit) => new Request(url, init);
 
