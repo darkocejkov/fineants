@@ -130,19 +130,26 @@ export function applyTagging(db: Db, opts: { now?: () => number } = {}): Tagging
     // as a transfer pointing back at it — that pair is confirmed, not stale, and the partner is
     // excluded from re-pairing below (transferSource === "manual"), so an unconditional drop
     // would orphan this row with nothing left to re-pair with. Recompute the rest among rows
-    // nobody pinned.
+    // nobody pinned. A confirmed pair's auto side must also be excluded from that recompute
+    // (below): otherwise a same-currency/amount collision could still reassign it to an
+    // unrelated candidate, breaking the pair asymmetrically just like an unconditional drop
+    // would.
+    const confirmedAutoIds = new Set<string>();
     for (const [id, d] of desired) {
       if (d.transferSource !== "auto") continue;
       const partner = d.counterpartTransactionId ? desired.get(d.counterpartTransactionId) : undefined;
       const partnerConfirmsPair = partner?.transferSource === "manual" && partner.counterpartTransactionId === id;
-      if (partnerConfirmsPair) continue;
+      if (partnerConfirmsPair) {
+        confirmedAutoIds.add(id);
+        continue;
+      }
       d.isTransfer = false;
       d.transferSource = null;
       d.counterpartTransactionId = null;
     }
     const candidates = rows.filter((r) => {
       const d = desired.get(r.id)!;
-      return !r.hidden && d.transferSource !== "manual" && d.transferSource !== "rule";
+      return !r.hidden && d.transferSource !== "manual" && d.transferSource !== "rule" && !confirmedAutoIds.has(r.id);
     });
     const pairs = pairTransfers(candidates.map((r) => ({ id: r.id, accountId: r.accountId, currency: r.currency, amountCents: r.amountCents, dateSec: r.dateSec, pending: r.pending })));
     for (const p of pairs) {

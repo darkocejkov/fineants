@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { sql } from "drizzle-orm";
 import { makeTestDb } from "../helpers/db";
-import { seedBasic, seedTransferPair } from "../helpers/seed";
+import { seedBasic, seedTransferPair, T0 } from "../helpers/seed";
 import type { Db } from "@/lib/db/client";
+import { transactions } from "@/lib/db/schema";
 import { createCategory } from "@/lib/queries/categories";
 import { createRule, deleteRule, updateRule } from "@/lib/queries/rules";
 import { applyTagging, applyRulesToOne, getLastTagging } from "@/lib/tagging/apply";
 import { getMeta, setCategory, clearCategoryOverride, setTransfer } from "@/lib/queries/meta";
+
+const day = (n: number) => Math.floor(T0 / 1000) - n * 86400;
+const iso = (n: number) => new Date(T0 - n * 86400 * 1000).toISOString();
 
 let db: Db;
 let groceries: number;
@@ -107,6 +111,30 @@ describe("applyTagging transfers", () => {
     expect(getMeta(db, "xfer-out")).toMatchObject({ isTransfer: true, transferSource: "manual", counterpartTransactionId: "xfer-in" });
     expect(getMeta(db, "xfer-in")).toMatchObject({ isTransfer: true, counterpartTransactionId: "xfer-out" });
     expect(r.transfersCleared).toBe(0);
+  });
+  it("a confirmed pair's auto side is not stolen by a same-amount collision", () => {
+    applyTagging(db);
+    setTransfer(db, "xfer-out", true);
+    // Another outflow, same currency/amount, nearest to xfer-in: would win the greedy match if
+    // xfer-in were still a re-pairing candidate.
+    db.insert(transactions).values({
+      id: "decoy-out",
+      accountId: "VISA",
+      posted: day(5),
+      transactedAt: null,
+      amountCents: -75000,
+      description: "UNRELATED TRANSFER",
+      payee: null,
+      memo: null,
+      pending: false,
+      raw: "{}",
+      firstSeenAt: iso(5),
+      lastSeenAt: iso(0),
+      localDate: iso(5).slice(0, 10),
+    }).run();
+    applyTagging(db);
+    expect(getMeta(db, "xfer-in")).toMatchObject({ counterpartTransactionId: "xfer-out" });
+    expect(getMeta(db, "decoy-out")?.isTransfer ?? false).toBe(false);
   });
   it("a rule marking transfers takes the row out of auto pairing", () => {
     createRule(db, { field: "any", match: "contains", pattern: "TRANSFER TO", markTransfer: true });
