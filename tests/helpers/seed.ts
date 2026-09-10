@@ -15,6 +15,7 @@ export function seedBasic(db: Db) {
   ]).run();
   const tx = (id: string, accountId: string, n: number, amountCents: number, description: string, payee?: string, pending = false) => ({
     id, accountId, posted: pending ? 0 : day(n), transactedAt: pending ? day(n) : null, amountCents, description, payee: payee ?? null, memo: null, pending, raw: "{}", firstSeenAt: iso(n), lastSeenAt: iso(0),
+    localDate: iso(n).slice(0, 10),
   });
   db.insert(transactions).values([
     tx("t1", "CHQ", 1, -4510, "GROCERY MART", "Grocery Mart"),

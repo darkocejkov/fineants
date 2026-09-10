@@ -6,6 +6,9 @@ export const STATE_KEYS = {
   credentialsInvalid: "credentials_invalid",
   lastSuccessfulSyncEnd: "last_successful_sync_end",
   schedulerMinuteOffset: "scheduler_minute_offset",
+  timezone: "timezone",
+  bootstrapVersion: "bootstrap_version",
+  lastTagging: "last_tagging",
 } as const;
 
 type StateDb = Pick<Db, "select" | "insert" | "delete">;
