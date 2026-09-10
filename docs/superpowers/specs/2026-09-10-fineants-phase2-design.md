@@ -151,7 +151,8 @@ by the tagging pass; `manual` with a null value is a valid state meaning "the ow
 | column | type | notes |
 | --- | --- | --- |
 | id | integer PK | |
-| name, lender | text | |
+| name | text | what the debt is for: "Couch", "Student loan" |
+| lender | text | who is owed: "Affirm", "Flexiti", "OSAP"; the form suggests existing lender names |
 | currency | text | |
 | kind | text | `bnpl`, `loan`, `other` |
 | principal_cents | integer | positive |
@@ -184,7 +185,8 @@ by the tagging pass; `manual` with a null value is a valid state meaning "the ow
 | column | type | notes |
 | --- | --- | --- |
 | id | integer PK | |
-| name | text | |
+| name | text | what it is for: "Phone", "Spotify" |
+| provider | text? | who is paid: "Rogers"; shown beside the name; the form uses it to default `match_pattern` |
 | currency | text | |
 | amount_cents | integer | expected outflow, positive |
 | cadence | text | `weekly`, `biweekly`, `monthly`, `yearly`, `custom_days` |
@@ -357,8 +359,9 @@ transactions without writing anything (used by the form's live preview);
   today), `due_soon` (nextDue within 14 days), `interest_starts_soon` (`interest_free_until`
   within 30 days and remaining > 0), else `on_track`. When several apply, that order wins.
 
-`queries/debts.ts`: CRUD for debts and payments; `listWithStatus(db, today)`;
-`totalsRemainingByCurrency(db)`; `linkTransaction(db, { debtId, transactionId, amountCents?,
+`queries/debts.ts`: CRUD for debts and payments; `listWithStatus(db, today)` (sorted by lender
+then next due); `lenders(db)` (distinct names for suggestions); `totalsRemainingByCurrency(db)`;
+`totalsByLender(db)`; `linkTransaction(db, { debtId, transactionId, amountCents?,
 paidOn?, note? })` creates a payment with `paid_on = transaction.local_date` and `amount_cents =
 |transaction.amount_cents|` unless overridden, and rejects a transaction already linked to any
 debt; `candidateTransactions(db, { q?, amountCents?, limit })` returns recent unlinked outflows,
@@ -431,8 +434,8 @@ Nav: Overview, Transactions, Spending, Budget, Recurring, Debts, Explorer, Setti
 | `/accounts/[id]` | same table changes |
 | `/spending` | transfers excluded; by-category ledger for the range; 12m buckets by month; footnote names the timezone |
 | `/budget` | month switcher (`?month=YYYY-MM`); capped categories ledger (spent, cap, remaining, pace word, fill rule); uncapped spend; uncategorised total linking to `/transactions?category=none&from&to`; income lines; caps edited inline (amount field per row) |
-| `/recurring` | stamp: monthly equivalent total; ledger: name, expected, cadence, next due, status word, matched transaction (date and amount) or "not seen"; add/edit form with live "would match N" preview; deactivate; show inactive toggle |
-| `/debts` | stamp: total remaining; ledger: name, lender, kind, remaining, next due or payoff date, status word; add form |
+| `/recurring` | stamp: monthly equivalent total; ledger: name with provider, expected, cadence, next due, status word, matched transaction (date and amount) or "not seen"; add/edit form with live "would match N" preview; deactivate; show inactive toggle |
+| `/debts` | stamp: total remaining; ledger grouped by lender (a lender with more than one debt gets a subtotal line): name, kind, remaining, next due or payoff date, status word; add form with lender suggestions from existing debts |
 | `/debts/[id]` | terms as `.facts`; schedule ledger (due, amount, paid, state) when scheduled, else the payoff sentence; payments ledger; Add payment form; Link a transaction picker (search text, amount, recent unlinked outflows) |
 | `/debts/link?tx=` | picker from the transactions side: shows the transaction, lists open debts, one-click link with prefilled amount and date |
 | `/settings` | new sections: Categories (rename, kind, archive, order), Rules (ordered ledger, add/edit form with live preview, move up/down, delete), Timezone (name, note on recompute), Connections (per-bank watermark and last error), Tagging (last run report, Re-run tagging button) |
