@@ -232,8 +232,8 @@ from `db/bootstrap.ts` after schema migration, in one SQLite transaction each:
 
 `src/lib/time.ts`:
 
-- `DEFAULT_TIMEZONE = "America/Toronto"`. Config `TIMEZONE` validated with
-  `Intl.supportedValuesOf("timeZone")`; a bad value is a `ConfigError`.
+- `DEFAULT_TIMEZONE = "America/Toronto"`. Config `TIMEZONE` validated by constructing an
+  `Intl.DateTimeFormat` with it (accepts IANA names and aliases); a bad value is a `ConfigError`.
 - `toLocalDate(unixSeconds, tz): string` via a cached `Intl.DateTimeFormat` (`en-CA` yields
   `YYYY-MM-DD` directly).
 - `todayLocal(tz, nowMs): string`.
@@ -392,7 +392,8 @@ the Explorer can show it.
 as `failed` with `error = "interrupted"`. Called from `startScheduler` and at the start of
 `runSync`.
 
-**Tagging after sync.** See §6 triggers. `SyncRunSummary` gains `tagging?: TaggingReport`.
+**Tagging after sync.** See §6 triggers. `SyncResult` gains `tagging?: TaggingReport` (the pass
+runs once after all windows, so it belongs to the result, not to a run).
 
 **`local_date`** is written for every upserted transaction from the effective date and the
 configured timezone.
@@ -422,8 +423,9 @@ Design direction remains binding. Additions to the direction doc, made before th
 - **Inline controls in ledgers**: a native `<select>` styled as text with a 1px ink underline
   and no chrome; saves on change via a form with a hidden submit; a visible focus ring.
 - **Forms**: one column, labels above fields, ink underline inputs, primary button as in phase 1.
-  Live previews ("Would match 14 transactions") are set as `.small` text under the field, updated
-  by a server action on blur (no client-side matching logic).
+  Live previews ("Would match 14 transactions") are set as `.small` text under the form, produced
+  by a "Preview matches" button that GETs the same page with the form values (no client-side
+  matching logic, no JavaScript needed).
 
 Nav: Overview, Transactions, Spending, Budget, Recurring, Debts, Explorer, Settings.
 
@@ -438,7 +440,7 @@ Nav: Overview, Transactions, Spending, Budget, Recurring, Debts, Explorer, Setti
 | `/debts` | stamp: total remaining; ledger grouped by lender (a lender with more than one debt gets a subtotal line): name, kind, remaining, next due or payoff date, status word; add form with lender suggestions from existing debts |
 | `/debts/[id]` | terms as `.facts`; schedule ledger (due, amount, paid, state) when scheduled, else the payoff sentence; payments ledger; Add payment form; Link a transaction picker (search text, amount, recent unlinked outflows) |
 | `/debts/link?tx=` | picker from the transactions side: shows the transaction, lists open debts, one-click link with prefilled amount and date |
-| `/settings` | new sections: Categories (rename, kind, archive, order), Rules (ordered ledger, add/edit form with live preview, move up/down, delete), Timezone (name, note on recompute), Connections (per-bank watermark and last error), Tagging (last run report, Re-run tagging button) |
+| `/settings` | General: sync facts, Timezone (name, note on recompute), Connections (per-bank watermark and last error), Tagging (last run report, Re-run tagging button), Accounts. A sub-nav links to `/settings/categories` (rename, kind, cap, archive, order) and `/settings/rules` (ordered ledger, add/edit form, move up/down, delete). The rule form's "Preview matches" is a GET to the same page carrying the form values, so it works without JavaScript |
 | `/explorer` | runs table gains "held" column (connections whose watermark did not advance); run detail shows attribution per error |
 
 Empty states follow the phase 1 pattern: each page says what the section is for and offers the
