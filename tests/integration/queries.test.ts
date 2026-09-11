@@ -12,6 +12,8 @@ import { setState, STATE_KEYS } from "@/lib/db/appState";
 import { accounts, balanceSnapshots, connections, syncRuns, transactions } from "@/lib/db/schema";
 import { createCategory } from "@/lib/queries/categories";
 import { setCategory, setTransfer } from "@/lib/queries/meta";
+import { seedDebts } from "../helpers/seed2b";
+import { linkTransaction } from "@/lib/queries/debts";
 
 const TODAY = "2026-09-09";
 
@@ -261,5 +263,15 @@ describe("syncRuns", () => {
     expect(s.lastSuccessfulSyncEnd).toBe(123);
     expect(s.credentialsInvalid?.reason).toBe("403");
     expect(s.latestErrlist).toEqual([]);
+  });
+});
+
+describe("transactions know which debt they pay", () => {
+  it("joins the debt name", () => {
+    const { couchId } = seedDebts(db);
+    linkTransaction(db, { debtId: couchId, transactionId: "t4" });
+    const rows = listTransactions(db, { pageSize: 100 }).rows;
+    expect(rows.find((r) => r.id === "t4")).toMatchObject({ debtId: couchId, debtName: "Couch" });
+    expect(rows.find((r) => r.id === "t1")).toMatchObject({ debtId: null, debtName: null });
   });
 });

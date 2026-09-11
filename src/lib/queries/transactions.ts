@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { accounts, categories, transactionMeta, transactions, type TransactionRow } from "../db/schema";
+import { accounts, categories, debtPayments, externalDebts, transactionMeta, transactions, type TransactionRow } from "../db/schema";
 
 export type TxFilter = {
   accountId?: string;
@@ -22,6 +22,8 @@ export type TxRow = TransactionRow & {
   categorySource: "rule" | "recurring" | "manual" | null;
   isTransfer: boolean;
   transferSource: "auto" | "rule" | "manual" | null;
+  debtId: number | null;
+  debtName: string | null;
 };
 
 export const effectiveDate = sql<number>`coalesce(nullif(${transactions.posted}, 0), ${transactions.transactedAt}, unixepoch(${transactions.firstSeenAt}))`;
@@ -88,11 +90,15 @@ export function listTransactions(db: Db, f: TxFilter = {}): { rows: TxRow[]; tot
       categorySource: transactionMeta.categorySource,
       isTransfer: sql<boolean>`coalesce(${transactionMeta.isTransfer}, 0)`.mapWith(Boolean),
       transferSource: transactionMeta.transferSource,
+      debtId: debtPayments.debtId,
+      debtName: externalDebts.name,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
     .leftJoin(transactionMeta, eq(transactionMeta.transactionId, transactions.id))
     .leftJoin(categories, eq(categories.id, transactionMeta.categoryId))
+    .leftJoin(debtPayments, eq(debtPayments.transactionId, transactions.id))
+    .leftJoin(externalDebts, eq(externalDebts.id, debtPayments.debtId))
     .where(where)
     .orderBy(desc(effectiveDate), desc(transactions.id))
     .limit(pageSize)
@@ -108,6 +114,8 @@ export function listTransactions(db: Db, f: TxFilter = {}): { rows: TxRow[]; tot
       categorySource: r.categorySource ?? null,
       isTransfer: r.isTransfer,
       transferSource: r.transferSource ?? null,
+      debtId: r.debtId ?? null,
+      debtName: r.debtName ?? null,
     }));
   return { rows, total, page, pageSize };
 }
