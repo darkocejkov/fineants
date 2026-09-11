@@ -39,6 +39,7 @@ function inputFrom(fd: FormData): DebtInput {
   const kind = str(fd, "kind");
   const cadence = str(fd, "cadence");
   const apr = str(fd, "apr");
+  const aprNum = apr ? Number(apr) : NaN;
   return {
     name: str(fd, "name"),
     lender: str(fd, "lender"),
@@ -48,7 +49,7 @@ function inputFrom(fd: FormData): DebtInput {
     openedOn: str(fd, "openedOn"),
     interestFreeUntil: str(fd, "interestFreeUntil") || null,
     payoffDueOn: str(fd, "payoffDueOn") || null,
-    aprBps: apr ? Math.round(Number(apr) * 100) : null,
+    aprBps: Number.isFinite(aprNum) ? Math.round(aprNum * 100) : null,
     dueDay: intOrNull(fd, "dueDay"),
     instalmentAmountCents: moneyOrNull(fd, "instalmentAmount"),
     cadence: cadence && (CADENCES as readonly string[]).includes(cadence) ? (cadence as Cadence) : null,
@@ -126,11 +127,12 @@ export async function linkTransactionAction(fd: FormData): Promise<void> {
   const debtId = Number(str(fd, "debtId"));
   const transactionId = str(fd, "transactionId");
   const back = safeReturn(fd.get("returnTo"), `/debts/${debtId}`);
+  const failPath = safeReturn(fd.get("failTo"), back);
   if (!Number.isInteger(debtId) || !transactionId) redirect(back);
   try {
     linkTransaction(getDb(), { debtId, transactionId, amountCents: moneyOrNull(fd, "amount") ?? undefined, paidOn: str(fd, "paidOn") || undefined, note: str(fd, "note") || null });
   } catch (e) {
-    fail(back, e);
+    fail(failPath, e);
   }
   revalidate(debtId);
   redirect(`${back}${back.includes("?") ? "&" : "?"}saved=link`);

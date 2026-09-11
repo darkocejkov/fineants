@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { loadConfig } from "@/lib/config";
 import { first, type SearchParams } from "@/lib/searchParams";
-import { listDebtsWithStatus, lenders, totalsRemainingByCurrency, totalsByLender } from "@/lib/queries/debts";
+import { listDebtsWithStatus, lenders, totalsRemainingByCurrency } from "@/lib/queries/debts";
 import { dominantCurrency } from "@/lib/queries/categories";
 import { DEBT_KINDS, CADENCES } from "@/lib/db/schema";
 import { DEBT_STATUS_WORDS } from "@/lib/debts/schedule";
@@ -23,7 +23,6 @@ export default async function DebtsPage({ searchParams }: { searchParams: Promis
   const showClosed = first(sp.closed) === "1";
   const rows = listDebtsWithStatus(db, { today, includeClosed: showClosed });
   const totals = totalsRemainingByCurrency(db);
-  const byLender = totalsByLender(db);
   const knownLenders = lenders(db);
   const currency = dominantCurrency(db) ?? "CAD";
   const error = first(sp.error);
@@ -78,7 +77,9 @@ export default async function DebtsPage({ searchParams }: { searchParams: Promis
               <tbody>
                 {[...groups.values()].map((list) => {
                   const lender = list[0].lender;
-                  const subtotal = byLender.filter((t) => t.lender.toLowerCase() === lender.toLowerCase());
+                  const byCurrency = new Map<string, number>();
+                  for (const r of list) byCurrency.set(r.currency, (byCurrency.get(r.currency) ?? 0) + r.remainingCents);
+                  const subtotal = [...byCurrency.entries()].map(([currency, remainingCents]) => ({ currency, remainingCents }));
                   return (
                     <Fragment key={lender}>
                       {list.map((r) => (

@@ -29,6 +29,7 @@ export default async function LinkPage({ searchParams }: { searchParams: Promise
   const debts = listDebtsWithStatus(db, { today }).filter((d) => d.status !== "paid_off");
   const returnTo = first(sp.returnTo) && /^\/(?![/\\])/.test(first(sp.returnTo)!) ? first(sp.returnTo)! : "/transactions";
   const error = first(sp.error);
+  const failTo = `/debts/link?tx=${encodeURIComponent(tx.id)}&returnTo=${encodeURIComponent(returnTo)}`;
 
   return (
     <>
@@ -62,6 +63,7 @@ export default async function LinkPage({ searchParams }: { searchParams: Promise
                         <input type="hidden" name="debtId" value={d.id} />
                         <input type="hidden" name="transactionId" value={tx.id} />
                         <input type="hidden" name="returnTo" value={returnTo} />
+                        <input type="hidden" name="failTo" value={failTo} />
                         <button className="row-action" type="submit">Link to {d.name}</button>
                       </form>
                     </td>
