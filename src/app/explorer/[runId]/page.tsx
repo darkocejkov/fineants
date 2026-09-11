@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db/client";
 import { getSyncRun } from "@/lib/queries/syncRuns";
+import { connections } from "@/lib/db/schema";
 import { isoToLocal, unixToDate } from "@/lib/format";
 import { JsonView } from "@/components/JsonView";
 import type { ErrItem } from "@/lib/simplefin/types";
@@ -17,9 +18,11 @@ export default async function RunPage({ params }: { params: Promise<{ runId: str
   if (!/^\d+$/.test(runId)) notFound();
   const id = Number(runId);
   if (!Number.isInteger(id)) notFound();
-  const run = getSyncRun(getDb(), id);
+  const db = getDb();
+  const run = getSyncRun(db, id);
   if (!run) notFound();
   const errs = JSON.parse(run.errlist) as ErrItem[];
+  const names = new Map(db.select({ id: connections.id, name: connections.name }).from(connections).all().map((c) => [c.id, c.name]));
 
   let parsed: Record<string, unknown> | null = null;
   let accounts: RawAccount[] = [];
@@ -81,7 +84,18 @@ export default async function RunPage({ params }: { params: Promise<{ runId: str
               {errs.length} {errs.length === 1 ? "item" : "items"}
             </p>
           </div>
-          <JsonView value={errs} />
+          <ul className="alert-list">
+            {errs.map((e, i) => (
+              <li key={`${e.code}-${e.connId ?? ""}-${i}`}>
+                <code>{e.code}</code> {e.msg}
+                <p className="small">
+                  {e.attributedConnectionId
+                    ? `Attributed to ${names.get(e.attributedConnectionId) ?? e.attributedConnectionId}.`
+                    : "Not attributed (holds every connection)."}
+                </p>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

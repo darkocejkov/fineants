@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { listSyncRuns } from "@/lib/queries/syncRuns";
+import { connections } from "@/lib/db/schema";
 import { isoToLocal, unixToDate } from "@/lib/format";
 import { EmptyState } from "@/components/EmptyState";
 import { SyncButton } from "@/components/SyncButton";
@@ -18,6 +19,7 @@ const STATUS_CLASS: Record<string, string> = {
 export default function ExplorerPage() {
   const db = getDb();
   const runs = listSyncRuns(db, 100);
+  const names = new Map(db.select({ id: connections.id, name: connections.name }).from(connections).all().map((c) => [c.id, c.name]));
 
   return (
     <>
@@ -63,6 +65,7 @@ export default function ExplorerPage() {
                     Pending removed
                   </th>
                   <th scope="col">Errors</th>
+                  <th scope="col">Held</th>
                 </tr>
               </thead>
               <tbody>
@@ -70,6 +73,10 @@ export default function ExplorerPage() {
                   const errs = JSON.parse(r.errlist) as ErrItem[];
                   const errorText = r.error ?? errs.map((e) => e.code).join(", ");
                   const errorTitle = [r.error, ...errs.map((e) => `${e.code}: ${e.msg}`)].filter(Boolean).join("\n");
+                  const heldAll = errs.some((e) => !e.attributedConnectionId);
+                  const heldNames = heldAll
+                    ? ["all"]
+                    : [...new Set(errs.map((e) => e.attributedConnectionId!))].map((id) => names.get(id) ?? id);
                   return (
                     <tr key={r.id}>
                       <td>
@@ -87,12 +94,17 @@ export default function ExplorerPage() {
                       <td className="ledger-truncate" title={errorTitle || undefined}>
                         {errorText || null}
                       </td>
+                      <td className="ledger-quiet">{heldNames.join(", ")}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+          <p className="footnote">
+            Held means that bank&rsquo;s sync watermark did not move for this run, so its window is fetched again next time. A
+            run with an error that names no bank holds all of them.
+          </p>
         </section>
       )}
     </>
