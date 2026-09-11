@@ -30,6 +30,16 @@ describe("computeWindows", () => {
     const w = computeWindows(null, NOW, 90);
     expect(w).toEqual([{ start: NOW - 90 * DAY, end: NOW }]);
   });
+  it("clamps a frozen watermark to the backfill horizon", () => {
+    // A connection held for 400 days must not grow the request count without limit: the range
+    // start is bounded by the backfill horizon, so it asks for exactly what a first sync asks for.
+    const frozen = NOW - 400 * DAY;
+    expect(computeWindows(frozen, NOW, 365)).toEqual(computeWindows(null, NOW, 365));
+  });
+  it("leaves a watermark inside the backfill horizon alone", () => {
+    const last = NOW - 10 * DAY;
+    expect(computeWindows(last, NOW, 365)).toEqual([{ start: last - OVERLAP_SECONDS, end: NOW }]);
+  });
   it("never returns an empty or inverted window", () => {
     const w = computeWindows(NOW, NOW, 365);
     expect(w).toEqual([{ start: NOW - OVERLAP_SECONDS, end: NOW }]);

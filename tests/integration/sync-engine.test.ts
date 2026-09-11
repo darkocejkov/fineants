@@ -8,6 +8,7 @@ import { runSync, RATE_GUARD_SECONDS, hashAccessUrl } from "@/lib/sync/engine";
 import { accounts, transactions, balanceSnapshots, syncRuns, connections, connectionSyncState } from "@/lib/db/schema";
 import { getState, setState, STATE_KEYS } from "@/lib/db/appState";
 import { DAY } from "@/lib/sync/windows";
+import { advanceWatermark, ensureConnectionState } from "@/lib/queries/connectionState";
 import { toLocalDate } from "@/lib/time";
 
 const ACCESS = "https://u:p@bridge.example/simplefin";
@@ -335,6 +336,36 @@ describe("runSync per-connection watermarks", () => {
     await runSync(d, { trigger: "cli" });
     const swept = db.select().from(syncRuns).orderBy(syncRuns.id).all()[0];
     expect(swept).toMatchObject({ status: "failed", error: "interrupted" });
+  });
+});
+
+describe("runSync watermarks across a multi-window run", () => {
+  it("holds a connection that errored in any window even when a later window comes back clean", async () => {
+    // 120 backfill days splits into two windows (90 + the remainder). conn-td errors in the
+    // first window only; advancing it to the second window's end would silently skip the first.
+    const healthy = fixture("two-connections.json");
+    healthy.errlist = [];
+    let call = 0;
+    const { db, fetchImpl, d } = deps(makeTestDb(), () => jsonResponse(++call === 1 ? fixture("two-connections.json") : healthy));
+    const r = await runSync({ ...d, backfillDays: 120 }, { trigger: "cli" });
+    expect(fetchImpl.calls).toHaveLength(2);
+    expect(r.runs.map((x) => x.status)).toEqual(["partial", "success"]);
+    const states = Object.fromEntries(db.select().from(connectionSyncState).all().map((s) => [s.connectionId, s]));
+    expect(states["conn-td"].lastSuccessEnd).toBeNull();
+    expect(states["conn-td"].lastErrorCode).toBe("con.auth");
+    expect(states["conn-tang"].lastSuccessEnd).toBe(Math.floor(NOW_MS / 1000));
+    expect(states["conn-tang"].lastErrorCode).toBeNull();
+  });
+  it("advanceWatermark never moves a watermark backwards", () => {
+    const db = makeTestDb();
+    const stamp = new Date(NOW_MS).toISOString();
+    db.insert(connections).values({ id: "conn-1", name: "Bank", raw: "{}", firstSeenAt: stamp, lastSeenAt: stamp }).run();
+    const ahead = Math.floor(NOW_MS / 1000);
+    ensureConnectionState(db, "conn-1", ahead);
+    advanceWatermark(db, "conn-1", ahead - 10 * DAY);
+    expect(db.select().from(connectionSyncState).get()!.lastSuccessEnd).toBe(ahead);
+    advanceWatermark(db, "conn-1", ahead + DAY);
+    expect(db.select().from(connectionSyncState).get()!.lastSuccessEnd).toBe(ahead + DAY);
   });
 });
 

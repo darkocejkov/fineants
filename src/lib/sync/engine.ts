@@ -76,12 +76,26 @@ export async function runSync(deps: SyncDeps, opts: { trigger: SyncTrigger; forc
   const runs: SyncRunSummary[] = [];
   const lastWindowEnd = windows[windows.length - 1]?.end;
 
+  // Watermarks are settled once, at the end of the run. Deciding per window would advance a
+  // connection that errored in window 2 to window 3's end the moment window 3 came back clean,
+  // and window 2 would never be re-fetched.
+  const seenIds = new Set<string>();
+  const heldAcrossRun = new Set<string>();
+  const lastErrorFor = new Map<string, ConnectionError>();
+  let lastGoodEnd: number | null = null;
+
   for (const window of windows) {
     const isLatestWindow = window.end === lastWindowEnd;
-    const summary = await syncWindow(deps, accessUrl, urlHash, window, opts.trigger, nowMs, isLatestWindow);
-    runs.push(summary);
-    if (summary.status === "failed") break;
+    const outcome = await syncWindow(deps, accessUrl, urlHash, window, opts.trigger, nowMs, isLatestWindow);
+    runs.push(outcome.summary);
+    for (const id of outcome.connectionIds) seenIds.add(id);
+    for (const id of outcome.heldIds) heldAcrossRun.add(id);
+    for (const [id, err] of outcome.errors) lastErrorFor.set(id, err);
+    if (outcome.summary.status === "failed") break;
+    lastGoodEnd = window.end;
   }
+
+  settleWatermarks(db, { seenIds, heldAcrossRun, lastErrorFor, lastGoodEnd, at: isoFromMs(nowMs) });
 
   const upserted = runs.reduce((n, r) => n + r.transactionsUpserted, 0);
   if (upserted === 0) return { runs };
@@ -101,6 +115,36 @@ export async function runSync(deps: SyncDeps, opts: { trigger: SyncTrigger; forc
   }
 }
 
+type ConnectionError = { code: string; msg: string };
+/** What one window contributes to the run's watermark decision, alongside its run summary. */
+type WindowOutcome = {
+  summary: SyncRunSummary;
+  connectionIds: string[];
+  heldIds: Set<string>;
+  errors: Map<string, ConnectionError>;
+};
+
+/**
+ * Advance every connection the run saw and never held, to the end of the last window that did
+ * not fail; hold the rest at whatever they had, carrying the last error seen for them.
+ */
+function settleWatermarks(
+  db: Db,
+  s: { seenIds: Set<string>; heldAcrossRun: Set<string>; lastErrorFor: Map<string, ConnectionError>; lastGoodEnd: number | null; at: string },
+): void {
+  if (s.seenIds.size === 0) return;
+  db.transaction((tx) => {
+    for (const id of s.seenIds) {
+      if (s.heldAcrossRun.has(id)) {
+        const err = s.lastErrorFor.get(id);
+        if (err) recordConnectionError(tx, id, err.code, err.msg, s.at);
+      } else if (s.lastGoodEnd !== null) {
+        advanceWatermark(tx, id, s.lastGoodEnd);
+      }
+    }
+  });
+}
+
 async function syncWindow(
   deps: SyncDeps,
   accessUrl: string,
@@ -109,7 +153,7 @@ async function syncWindow(
   trigger: SyncTrigger,
   nowMs: number,
   isLatestWindow: boolean,
-): Promise<SyncRunSummary> {
+): Promise<WindowOutcome> {
   const { db } = deps;
   const stamp = isoFromMs(nowMs);
   const run = db
@@ -119,6 +163,8 @@ async function syncWindow(
     .get();
 
   const base = { runId: run.id, windowStart: window.start, windowEnd: window.end, accountsSeen: 0, transactionsUpserted: 0, pendingRemoved: 0, errlist: [] as ErrItem[] };
+  // A window that never wrote anything contributes nothing to the run's watermark decision.
+  const noOutcome = { connectionIds: [] as string[], heldIds: new Set<string>(), errors: new Map<string, ConnectionError>() };
 
   let accountSet: AccountSet;
   let rawBody: string | undefined;
@@ -139,7 +185,15 @@ async function syncWindow(
       .set({ status: "failed", finishedAt: stamp, error: message, rawResponse: raw, httpStatus: errInfo.status })
       .where(eq(syncRuns.id, run.id))
       .run();
-    return { ...base, status: "failed", error: message };
+    return { summary: { ...base, status: "failed", error: message }, ...noOutcome };
+  }
+
+  const attribution = attributeErrors(accountSet.errlist, accountSet.connections);
+  const errors = new Map<string, ConnectionError>();
+  for (const id of attribution.heldIds) {
+    // An error pinned on this connection, else the unattributed one that holds everybody.
+    const err = attribution.items.find((e) => e.attributedConnectionId === id) ?? attribution.items.find((e) => !e.attributedConnectionId)!;
+    errors.set(id, { code: err.code, msg: err.msg });
   }
 
   // The run row was inserted before the fetch, outside this transaction, so a throw in here
@@ -190,35 +244,33 @@ async function syncWindow(
           .run();
       }
 
-      const attribution = attributeErrors(accountSet.errlist, accountSet.connections);
       const status = accountSet.errlist.length ? "partial" : "success";
       tx.update(syncRuns)
         .set({ status, finishedAt: stamp, httpStatus, accountsSeen: accountSet.accounts.length, transactionsUpserted: upserted, pendingRemoved: removed, errlist: JSON.stringify(attribution.items), rawResponse: rawBody })
         .where(eq(syncRuns.id, run.id))
         .run();
 
-      // Per-connection watermarks: a connection advances unless an error was pinned on it (or on
-      // nobody, which pins it on everyone). New connections are seeded from the global watermark.
+      // New connections are seeded from the global watermark rather than forced into a full
+      // backfill. Whether each one advances is decided once the whole run is done, in
+      // settleWatermarks — an error in any window has to hold the connection past the windows
+      // that came back clean after it.
       const seed = getState<number>(tx, STATE_KEYS.lastSuccessfulSyncEnd) ?? null;
-      for (const c of accountSet.connections) {
-        ensureConnectionState(tx, c.id, seed);
-        if (attribution.heldIds.has(c.id)) {
-          const err = attribution.items.find((e) => e.attributedConnectionId === c.id) ?? attribution.items.find((e) => !e.attributedConnectionId)!;
-          recordConnectionError(tx, c.id, err.code, err.msg, stamp);
-        } else {
-          advanceWatermark(tx, c.id, window.end);
-        }
-      }
+      for (const c of accountSet.connections) ensureConnectionState(tx, c.id, seed);
       setState(tx, STATE_KEYS.lastSuccessfulSyncEnd, window.end);
       // The fetch succeeded, so whatever credentials we used are good — clear any stale flag.
       deleteState(tx, STATE_KEYS.credentialsInvalid);
       return { status, upserted, removed, errlist: attribution.items } as const;
     });
 
-    return { ...base, status: result.status, accountsSeen: accountSet.accounts.length, transactionsUpserted: result.upserted, pendingRemoved: result.removed, errlist: result.errlist };
+    return {
+      summary: { ...base, status: result.status, accountsSeen: accountSet.accounts.length, transactionsUpserted: result.upserted, pendingRemoved: result.removed, errlist: result.errlist },
+      connectionIds: accountSet.connections.map((c) => c.id),
+      heldIds: attribution.heldIds,
+      errors,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     db.update(syncRuns).set({ status: "failed", finishedAt: stamp, error: message }).where(eq(syncRuns.id, run.id)).run();
-    return { ...base, status: "failed", error: message };
+    return { summary: { ...base, status: "failed", error: message }, ...noOutcome };
   }
 }

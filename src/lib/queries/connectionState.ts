@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { connectionSyncState, type ConnectionSyncStateRow } from "../db/schema";
 
@@ -29,9 +29,19 @@ export function ensureConnectionState(db: StateDb, connectionId: string, seedEnd
   db.insert(connectionSyncState).values({ connectionId, lastSuccessEnd: seedEnd }).onConflictDoNothing().run();
 }
 
+/**
+ * Move a watermark forward. Never backwards: a recovery backfill re-fetches old windows for the
+ * connection that needs them, and a healthy connection that already reaches further must keep
+ * what it has rather than be dragged back and re-fetch everything on the next run.
+ */
 export function advanceWatermark(db: StateDb, connectionId: string, end: number): void {
   db.update(connectionSyncState)
-    .set({ lastSuccessEnd: end, lastErrorCode: null, lastErrorMsg: null, lastErrorAt: null })
+    .set({
+      lastSuccessEnd: sql`max(coalesce(${connectionSyncState.lastSuccessEnd}, 0), ${end})`,
+      lastErrorCode: null,
+      lastErrorMsg: null,
+      lastErrorAt: null,
+    })
     .where(eq(connectionSyncState.connectionId, connectionId))
     .run();
 }
