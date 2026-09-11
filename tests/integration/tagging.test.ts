@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { makeTestDb } from "../helpers/db";
 import { seedBasic, seedTransferPair, T0 } from "../helpers/seed";
 import type { Db } from "@/lib/db/client";
-import { transactions } from "@/lib/db/schema";
+import { accounts, transactions } from "@/lib/db/schema";
 import { createCategory } from "@/lib/queries/categories";
 import { createRule, deleteRule, updateRule } from "@/lib/queries/rules";
 import { applyTagging, applyRulesToOne, getLastTagging } from "@/lib/tagging/apply";
@@ -111,6 +111,29 @@ describe("applyTagging transfers", () => {
     expect(getMeta(db, "xfer-out")).toMatchObject({ isTransfer: true, transferSource: "manual", counterpartTransactionId: "xfer-in" });
     expect(getMeta(db, "xfer-in")).toMatchObject({ isTransfer: true, counterpartTransactionId: "xfer-out" });
     expect(r.transfersCleared).toBe(0);
+  });
+  it("un-marking a confirmed transfer frees the auto partner it still points at", () => {
+    applyTagging(db);
+    setTransfer(db, "xfer-out", true); // confirm the pair: xfer-out is now manual, xfer-in still auto
+    setTransfer(db, "xfer-out", false); // and change your mind
+    expect(getMeta(db, "xfer-out")).toMatchObject({ isTransfer: false, transferSource: "manual", counterpartTransactionId: null });
+    expect(getMeta(db, "xfer-in")?.isTransfer ?? false).toBe(false);
+    expect(getMeta(db, "xfer-in")?.counterpartTransactionId ?? null).toBeNull();
+    // xfer-out is pinned as "not a transfer", so the pass has nothing to pair xfer-in with.
+    const r = applyTagging(db);
+    expect(r.transfersPaired).toBe(0);
+    expect(getMeta(db, "xfer-in")?.isTransfer ?? false).toBe(false);
+    expect(getMeta(db, "xfer-in")?.counterpartTransactionId ?? null).toBeNull();
+  });
+  it("clears both sides of a pair once one of the accounts is hidden", () => {
+    applyTagging(db);
+    db.update(accounts).set({ hidden: true }).where(eq(accounts.id, "SAV")).run();
+    const r = applyTagging(db);
+    // transfersCleared counts rows, not pairs: the pass drops the auto pairing on both sides and
+    // the hidden row is no longer a re-pairing candidate, so both stop being transfers.
+    expect(r.transfersCleared).toBe(2);
+    expect(getMeta(db, "xfer-out")?.isTransfer ?? false).toBe(false);
+    expect(getMeta(db, "xfer-in")?.isTransfer ?? false).toBe(false);
   });
   it("a confirmed pair's auto side is not stolen by a same-amount collision", () => {
     applyTagging(db);

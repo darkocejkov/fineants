@@ -34,15 +34,23 @@ export function clearCategoryOverride(db: Db, transactionId: string, nowIso = no
 
 export function setTransfer(db: Db, transactionId: string, isTransfer: boolean, nowIso = now()): void {
   const m = getMeta(db, transactionId);
+  const counterpartId = m?.counterpartTransactionId ?? null;
+  // Unmarking a transfer frees an auto partner so the next pass can re-pair it with something
+  // else. That holds whether this row is still the pass's own auto side or was pinned `true`
+  // first — confirming a pair leaves this row `manual` while it keeps the counterpart, and the
+  // partner would otherwise stay a transfer pointing at a row that is no longer one, with
+  // nothing left to re-pair it. Pinning `true` must NOT free the partner: the pair is confirmed,
+  // not broken, so both sides stay intact and the partner keeps its own (auto) source.
+  const partner = !isTransfer && counterpartId !== null ? getMeta(db, counterpartId) : undefined;
+  const freeId =
+    counterpartId !== null && (m?.transferSource === "auto" || (partner?.transferSource === "auto" && partner.counterpartTransactionId === transactionId))
+      ? counterpartId
+      : null;
   db.transaction((tx) => {
-    // Unmarking a transfer frees an auto partner so the next pass can re-pair it with something
-    // else. Pinning `true` on a row that already has an auto counterpart must NOT free that
-    // partner: the pair is confirmed, not broken, so both sides stay intact — the partner keeps
-    // pointing back at this row and keeps its own (auto) source.
-    if (!isTransfer && m?.counterpartTransactionId && m.transferSource === "auto") {
-      upsertMeta(tx, m.counterpartTransactionId, { isTransfer: false, transferSource: null, counterpartTransactionId: null }, nowIso);
+    if (!isTransfer && freeId !== null) {
+      upsertMeta(tx, freeId, { isTransfer: false, transferSource: null, counterpartTransactionId: null }, nowIso);
     }
-    upsertMeta(tx, transactionId, { isTransfer, transferSource: "manual", counterpartTransactionId: isTransfer ? (m?.counterpartTransactionId ?? null) : null }, nowIso);
+    upsertMeta(tx, transactionId, { isTransfer, transferSource: "manual", counterpartTransactionId: isTransfer ? counterpartId : null }, nowIso);
   });
 }
 
