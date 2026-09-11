@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { makeTestDb } from "../helpers/db";
 import { seedBasic, seedTransferPair, T0 } from "../helpers/seed";
 import type { Db } from "@/lib/db/client";
@@ -107,6 +108,17 @@ describe("transactions", () => {
     expect(listTransactions(db, { q: "coffee" }).rows.map((r) => r.id)).toEqual(["t2"]);
     expect(listTransactions(db, { q: "Employer" }).rows.map((r) => r.id)).toEqual(["t3"]);
     expect(listTransactions(db, { from: "2026-09-06", to: "2026-09-08" }).rows.map((r) => r.id)).toEqual(["t1", "t2", "t3"]);
+  });
+  it("filters dates on local_date rather than the UTC instant", () => {
+    // 03:30Z on the 9th is still the 8th in America/Toronto. Every bucketed query and the
+    // Spending by-category drill-down links go by local_date, so the list has to agree with them
+    // or the drill-down count disagrees with the rows it lands on.
+    db.update(transactions)
+      .set({ posted: Math.floor(Date.UTC(2026, 8, 9, 3, 30) / 1000), localDate: "2026-09-08" })
+      .where(eq(transactions.id, "t1"))
+      .run();
+    expect(listTransactions(db, { from: "2026-09-08", to: "2026-09-08" }).rows.map((r) => r.id)).toContain("t1");
+    expect(listTransactions(db, { from: "2026-09-09", to: "2026-09-09" }).rows.map((r) => r.id)).not.toContain("t1");
   });
   it("paginates", () => {
     const p1 = listTransactions(db, { page: 1, pageSize: 3 });

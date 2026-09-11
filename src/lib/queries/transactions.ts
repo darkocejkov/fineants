@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { accounts, categories, transactionMeta, transactions, type TransactionRow } from "../db/schema";
 
@@ -28,10 +28,6 @@ export const effectiveDate = sql<number>`coalesce(nullif(${transactions.posted},
 /** True for rows that are not transfers (meta row absent counts as not a transfer). */
 export const notTransfer = sql`coalesce(${transactionMeta.isTransfer}, 0) = 0`;
 
-export function dateToUnix(date: string): number {
-  return Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000);
-}
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isValidDate(date: string): boolean {
@@ -58,8 +54,11 @@ function buildWhere(f: TxFilter): SQL | undefined {
       ),
     );
   }
-  if (f.from && isValidDate(f.from)) parts.push(gte(effectiveDate, dateToUnix(f.from)));
-  if (f.to && isValidDate(f.to)) parts.push(lt(effectiveDate, dateToUnix(f.to) + 86400));
+  // Dates are filtered on local_date, inclusive at both ends, because every bucketed query and
+  // the Spending drill-down links (`from=<since>&to=<today>`) are in local days: comparing the
+  // UTC instant instead makes the drill-down count disagree with the list it lands on.
+  if (f.from && isValidDate(f.from)) parts.push(gte(transactions.localDate, f.from));
+  if (f.to && isValidDate(f.to)) parts.push(lte(transactions.localDate, f.to));
   if (f.categoryId === "none") parts.push(isNull(transactionMeta.categoryId));
   else if (typeof f.categoryId === "number") parts.push(eq(transactionMeta.categoryId, f.categoryId));
   if (f.hideTransfers) parts.push(notTransfer);
