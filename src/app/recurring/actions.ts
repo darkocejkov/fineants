@@ -63,7 +63,7 @@ export async function createRecurringAction(fd: FormData): Promise<void> {
 
 export async function updateRecurringAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (!Number.isInteger(id)) redirect("/recurring");
+  if (!Number.isInteger(id) || id <= 0) redirect("/recurring");
   try {
     const db = getDb();
     updateRecurringCost(db, id, { ...inputFrom(fd), active: fd.get("active") === "on" });
@@ -77,7 +77,7 @@ export async function updateRecurringAction(fd: FormData): Promise<void> {
 
 export async function setRecurringActiveAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (Number.isInteger(id)) {
+  if (Number.isInteger(id) && id > 0) {
     setRecurringActive(getDb(), id, str(fd, "active") === "1");
     applyTagging(getDb());
     revalidate();
@@ -87,7 +87,7 @@ export async function setRecurringActiveAction(fd: FormData): Promise<void> {
 
 export async function deleteRecurringAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (Number.isInteger(id)) {
+  if (Number.isInteger(id) && id > 0) {
     deleteRecurringCost(getDb(), id);
     applyTagging(getDb());
     revalidate();

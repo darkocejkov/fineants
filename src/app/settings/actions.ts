@@ -71,7 +71,7 @@ export async function createCategoryAction(fd: FormData): Promise<void> {
 
 export async function updateCategoryAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (!Number.isInteger(id)) redirect("/settings/categories");
+  if (!Number.isInteger(id) || id <= 0) redirect("/settings/categories");
   const kind = (CATEGORY_KINDS as readonly string[]).includes(str(fd, "kind")) ? (str(fd, "kind") as CategoryKind) : undefined;
   const cap = moneyOrNull(fd, "cap");
   try {
@@ -85,7 +85,7 @@ export async function updateCategoryAction(fd: FormData): Promise<void> {
 
 export async function archiveCategoryAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (Number.isInteger(id)) {
+  if (Number.isInteger(id) && id > 0) {
     setCategoryArchived(getDb(), id, str(fd, "archived") === "1");
     applyTagging(getDb());
     revalidateTagged();
@@ -96,7 +96,7 @@ export async function archiveCategoryAction(fd: FormData): Promise<void> {
 export async function moveCategoryAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
   const dir = str(fd, "direction");
-  if (Number.isInteger(id) && (dir === "up" || dir === "down")) {
+  if (Number.isInteger(id) && id > 0 && (dir === "up" || dir === "down")) {
     moveCategory(getDb(), id, dir);
     revalidatePath("/settings/categories");
   }
@@ -134,7 +134,7 @@ export async function createRuleAction(fd: FormData): Promise<void> {
 
 export async function updateRuleAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (!Number.isInteger(id)) redirect("/settings/rules");
+  if (!Number.isInteger(id) || id <= 0) redirect("/settings/rules");
   try {
     updateRule(getDb(), id, ruleInputFrom(fd, true));
   } catch (e) {
@@ -147,7 +147,7 @@ export async function updateRuleAction(fd: FormData): Promise<void> {
 
 export async function deleteRuleAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (Number.isInteger(id)) {
+  if (Number.isInteger(id) && id > 0) {
     deleteRule(getDb(), id);
     applyTagging(getDb());
     revalidateTagged();
@@ -158,7 +158,7 @@ export async function deleteRuleAction(fd: FormData): Promise<void> {
 export async function moveRuleAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
   const dir = str(fd, "direction");
-  if (Number.isInteger(id) && (dir === "up" || dir === "down")) {
+  if (Number.isInteger(id) && id > 0 && (dir === "up" || dir === "down")) {
     moveRule(getDb(), id, dir);
     applyTagging(getDb());
     revalidateTagged();

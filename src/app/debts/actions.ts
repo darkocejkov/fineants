@@ -73,7 +73,7 @@ export async function createDebtAction(fd: FormData): Promise<void> {
 
 export async function updateDebtAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (!Number.isInteger(id)) redirect("/debts");
+  if (!Number.isInteger(id) || id <= 0) redirect("/debts");
   try {
     updateDebt(getDb(), id, inputFrom(fd));
   } catch (e) {
@@ -85,7 +85,7 @@ export async function updateDebtAction(fd: FormData): Promise<void> {
 
 export async function setDebtClosedAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (Number.isInteger(id)) {
+  if (Number.isInteger(id) && id > 0) {
     setDebtClosed(getDb(), id, str(fd, "closed") === "1");
     revalidate(id);
   }
@@ -94,7 +94,7 @@ export async function setDebtClosedAction(fd: FormData): Promise<void> {
 
 export async function deleteDebtAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
-  if (Number.isInteger(id)) {
+  if (Number.isInteger(id) && id > 0) {
     deleteDebt(getDb(), id);
     revalidate();
   }
@@ -103,7 +103,7 @@ export async function deleteDebtAction(fd: FormData): Promise<void> {
 
 export async function addPaymentAction(fd: FormData): Promise<void> {
   const debtId = Number(str(fd, "debtId"));
-  if (!Number.isInteger(debtId)) redirect("/debts");
+  if (!Number.isInteger(debtId) || debtId <= 0) redirect("/debts");
   try {
     addPayment(getDb(), { debtId, paidOn: str(fd, "paidOn"), amountCents: moneyOrNull(fd, "amount") ?? 0, note: str(fd, "note") || null });
   } catch (e) {
@@ -116,7 +116,7 @@ export async function addPaymentAction(fd: FormData): Promise<void> {
 export async function deletePaymentAction(fd: FormData): Promise<void> {
   const debtId = Number(str(fd, "debtId"));
   const paymentId = Number(str(fd, "paymentId"));
-  if (Number.isInteger(paymentId)) {
+  if (Number.isInteger(paymentId) && paymentId > 0) {
     deletePayment(getDb(), paymentId);
     revalidate(debtId);
   }
@@ -128,7 +128,7 @@ export async function linkTransactionAction(fd: FormData): Promise<void> {
   const transactionId = str(fd, "transactionId");
   const back = safeReturn(fd.get("returnTo"), `/debts/${debtId}`);
   const failPath = safeReturn(fd.get("failTo"), back);
-  if (!Number.isInteger(debtId) || !transactionId) redirect(back);
+  if (!Number.isInteger(debtId) || debtId <= 0 || !transactionId) redirect(back);
   try {
     linkTransaction(getDb(), { debtId, transactionId, amountCents: moneyOrNull(fd, "amount") ?? undefined, paidOn: str(fd, "paidOn") || undefined, note: str(fd, "note") || null });
   } catch (e) {

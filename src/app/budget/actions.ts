@@ -19,7 +19,7 @@ export async function setCategoryCapAction(fd: FormData): Promise<void> {
   const id = Number(str(fd, "id"));
   const month = /^\d{4}-\d{2}$/.test(str(fd, "month")) ? str(fd, "month") : "";
   const back = month ? `/budget?month=${month}` : "/budget";
-  if (!Number.isInteger(id)) redirect(back);
+  if (!Number.isInteger(id) || id <= 0) redirect(back);
   const cap = moneyOrNull(fd, "cap");
   let error: string | null = null;
   try {
