@@ -5,7 +5,7 @@ import type { Db } from "@/lib/db/client";
 import {
   DEFAULT_CATEGORIES, listCategories, createCategory, updateCategory, setCategoryArchived, moveCategory, seedDefaultCategories, dominantCurrency, getCategory,
 } from "@/lib/queries/categories";
-import { validateRuleInput, listRules, createRule, updateRule, deleteRule, moveRule } from "@/lib/queries/rules";
+import { validateRuleInput, listRules, createRule, updateRule, deleteRule, moveRule, previewRuleMatches } from "@/lib/queries/rules";
 
 let db: Db;
 beforeEach(() => {
@@ -80,5 +80,15 @@ describe("rules", () => {
   });
   it("refuses invalid input on create and update", () => {
     expect(() => createRule(db, { field: "any", match: "regex", pattern: "(", categoryId: 1 })).toThrow(/regular expression/i);
+  });
+});
+
+describe("previewRuleMatches", () => {
+  it("counts and samples matching transactions without writing", () => {
+    const r = previewRuleMatches(db, { field: "any", match: "contains", pattern: "o", categoryId: 1 }, 2);
+    expect(r.count).toBeGreaterThanOrEqual(3);
+    expect(r.sample).toHaveLength(2);
+    expect(r.sample[0]).toHaveProperty("payee");
+    expect(previewRuleMatches(db, { field: "any", match: "regex", pattern: "(", categoryId: 1 }).count).toBe(0);
   });
 });

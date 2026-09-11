@@ -1,6 +1,8 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { rules, RULE_FIELDS, RULE_MATCHES, type RuleField, type RuleMatch, type RuleRow } from "../db/schema";
+import { accounts, rules, transactions, RULE_FIELDS, RULE_MATCHES, type RuleField, type RuleMatch, type RuleRow } from "../db/schema";
+import { compileRules } from "../tagging/rules";
+import { effectiveDate } from "./transactions";
 
 export type RuleInput = {
   name?: string;
@@ -90,6 +92,21 @@ export function updateRule(db: Db, id: number, input: RuleInput, nowIso = now())
 
 export function deleteRule(db: Db, id: number): void {
   db.delete(rules).where(eq(rules.id, id)).run();
+}
+
+/** Counts and samples the transactions a not-yet-saved rule would match, without writing anything. */
+export function previewRuleMatches(db: Db, input: RuleInput, limit = 5) {
+  const { compiled } = compileRules([{ id: 0, field: input.field, match: input.match, pattern: input.pattern.trim(), accountId: input.accountId ?? null, minAmountCents: input.minAmountCents ?? null, maxAmountCents: input.maxAmountCents ?? null, categoryId: input.categoryId ?? null, markTransfer: input.markTransfer ?? false }]);
+  const rule = compiled[0];
+  if (!rule) return { count: 0, sample: [] };
+  const rows = db
+    .select({ id: transactions.id, accountId: transactions.accountId, localDate: transactions.localDate, payee: transactions.payee, description: transactions.description, amountCents: transactions.amountCents, currency: accounts.currency })
+    .from(transactions)
+    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .orderBy(desc(effectiveDate), desc(transactions.id))
+    .all();
+  const matched = rows.filter((r) => rule.test(r));
+  return { count: matched.length, sample: matched.slice(0, limit).map(({ accountId: _a, ...rest }) => rest) };
 }
 
 export function moveRule(db: Db, id: number, direction: "up" | "down"): void {
