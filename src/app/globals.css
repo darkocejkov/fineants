@@ -683,3 +683,143 @@ select {
     transition: none;
   }
 }
+
+/* ---- phase 2: inline controls, status words, forms, sub-nav, fill rule -- */
+
+.inline-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ink-2);
+  border-radius: 0;
+  padding: 0 0 1px;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  max-width: 12rem;
+}
+.inline-select:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+.inline-form {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.row-actions {
+  white-space: nowrap;
+}
+.row-action {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--cobalt);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.row-action + .row-action {
+  margin-left: 0.75rem;
+}
+.row-action:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+
+.status-word {
+  font-size: inherit;
+}
+.status-good { color: var(--bottle); }
+.status-attention { color: var(--ochre); }
+.status-bad { color: var(--oxblood); }
+.status-neutral { color: var(--ink-2); }
+
+.ledger-transfer td.ledger-num .amount,
+.ledger-transfer td.ledger-num {
+  color: var(--ink-2);
+}
+
+.form {
+  display: grid;
+  gap: 0.875rem;
+  max-width: 36rem;
+  margin-top: 1rem;
+}
+.form-field {
+  display: grid;
+  gap: 0.25rem;
+}
+.form-field > span {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem;
+}
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.form-note {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+.form-error {
+  color: var(--oxblood);
+  margin: 0.5rem 0 0;
+}
+.preview {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+.preview .ledger {
+  margin-top: 0.5rem;
+}
+
+.subnav {
+  display: flex;
+  gap: 1.25rem;
+  margin: 0.25rem 0 1.5rem;
+  font-size: 0.9375rem;
+}
+.subnav a {
+  color: var(--ink);
+  text-decoration: none;
+  padding-bottom: 4px;
+}
+.subnav a.subnav-current {
+  border-bottom: 2px solid var(--ink);
+}
+
+.fill-rule {
+  position: relative;
+  height: 3px;
+  background: var(--paper-2);
+  min-width: 8rem;
+}
+.fill-rule-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ink);
+}
+.fill-rule-over {
+  position: absolute;
+  inset: 0 0 0 auto;
+  background: var(--oxblood);
+}
+
+@media (max-width: 40rem) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}

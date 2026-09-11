@@ -57,3 +57,15 @@ Copy: sentence case, plain verbs, from the user's point of view. Empty states te
 - Not the card kit: no cards, no shadows, no uniform radius.
 - No eyebrows, no all-caps labels, no mono data labels, no middle dots, no arrows, no per-section fade-ins.
 - Boldness spent once: the stamp figures.
+
+## Phase 2 additions
+
+Binding for plan 2a Tasks 10–15 and all of plan 2b. Same tokens, same rules; these are the new patterns phase 2 needs.
+
+- **Status words.** paid, due, overdue, on pace, ahead of pace, over, due soon, interest starts soon, paid off, held, transfer. Sentence case body or ledger type, coloured by role only: `--bottle` good, `--ochre` attention, `--oxblood` bad, `--ink-2` neutral. Never a badge, pill, dot, or icon; the word is the indicator.
+- **Inline controls in ledgers.** A native `<select>` set as text: no background, no border except a 1px `--ink-2` bottom rule, same size as ledger type, `--cobalt` focus ring. Saves on change when JavaScript is present; a small "Save" button beside it is rendered inside `<noscript>`. Row actions are plain text links or text buttons in `--cobalt`, separated by spaces, right of the row's content; never icon buttons.
+- **Transfer rows.** Both amounts in `--ink-2` (the `.ledger-quiet` role) and the status word "transfer" beside the payee, so a transfer reads as movement, not spending.
+- **Forms.** One column, max 36rem, label above field, inputs as in phase 1 (1px `--ink-2` border, 2px radius, `--paper-2` background). Two fields may share a row when they are a pair (min and max amount). Primary button names the outcome ("Save rule", "Add category"). Validation errors are a sentence in `--oxblood` under the form's title, naming the field in words. A live preview ("Would match 14 transactions, for example: …") is small `--ink-2` text under the form with up to five sample rows in ledger type.
+- **Fill rule (budgets, plan 2b).** Progress is a 3px rule in `--paper-2` the full width of its cell, with the spent fraction drawn over it in `--ink`; spend past the cap continues in `--oxblood`. No rounded ends, no gradient, no percentage label inside it (the figures sit in the columns beside it).
+- **Settings sub-nav.** Settings splits into General, Categories, Rules (and in 2b nothing more; recurring costs and debts have their own pages). The sub-nav is a row of plain text links under the page title, current one underlined 2px `--ink` like the masthead nav.
+- **Self-check additions.** No coloured backgrounds behind status words. No toggles or switches; checkboxes stay checkboxes. No modals; the debt link picker and rule preview are pages or page sections reached by URL.
