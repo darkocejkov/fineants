@@ -168,7 +168,7 @@ export const transactionMeta = sqliteTable(
     ruleId: integer("rule_id").references(() => rules.id, { onDelete: "set null" }),
     isTransfer: integer("is_transfer", { mode: "boolean" }).notNull().default(false),
     transferSource: text("transfer_source", { enum: ["auto", "rule", "manual"] }),
-    counterpartTransactionId: text("counterpart_transaction_id").references(() => transactions.id),
+    counterpartTransactionId: text("counterpart_transaction_id").references(() => transactions.id, { onDelete: "set null" }),
     recurringCostId: integer("recurring_cost_id").references(() => recurringCosts.id, { onDelete: "set null" }),
     recurringSource: text("recurring_source", { enum: ["auto", "manual"] }),
     note: text("note"),

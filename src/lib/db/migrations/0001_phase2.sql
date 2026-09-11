@@ -113,7 +113,7 @@ CREATE TABLE `transaction_meta` (
 	FOREIGN KEY (`transaction_id`) REFERENCES `transactions`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`rule_id`) REFERENCES `rules`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`counterpart_transaction_id`) REFERENCES `transactions`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`counterpart_transaction_id`) REFERENCES `transactions`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`recurring_cost_id`) REFERENCES `recurring_costs`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint

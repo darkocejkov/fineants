@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "143c74a0-c87d-4268-978b-21252756d5ef",
+  "id": "b0003af4-ba24-47cb-8b1e-4f463a4e29fd",
   "prevId": "c95e0e13-2213-4f6a-8449-88fb1890b99c",
   "tables": {
     "accounts": {
@@ -1254,7 +1254,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "transaction_meta_recurring_cost_id_recurring_costs_id_fk": {

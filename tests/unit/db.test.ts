@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { makeTestDb } from "../helpers/db";
 import { getState, setState, deleteState } from "@/lib/db/appState";
+import { accounts, connections, transactionMeta, transactions } from "@/lib/db/schema";
 
 describe("createDb", () => {
   it("creates all tables", () => {
@@ -38,6 +39,23 @@ describe("phase 2 schema", () => {
     expect(cols).toContain("local_date");
     const idx = db.all<{ name: string }>(sql`pragma index_list(transactions)`).map((r) => r.name);
     expect(idx).toContain("transactions_local_date_idx");
+  });
+  it("nulls a transfer counterpart when the partner transaction is deleted", () => {
+    const db = makeTestDb();
+    db.insert(connections).values({ id: "org-1", name: "Bank", raw: "{}", firstSeenAt: "x", lastSeenAt: "x" }).run();
+    db.insert(accounts).values({ id: "CHQ", connectionId: "org-1", name: "Chequing", currency: "CAD", balanceCents: 0, balanceDate: 0, raw: "{}", firstSeenAt: "x", lastSeenAt: "x" }).run();
+    db.insert(transactions).values([
+      { id: "tx-1", accountId: "CHQ", posted: 1, amountCents: -100, description: "OUT", raw: "{}", firstSeenAt: "x", lastSeenAt: "x" },
+      { id: "tx-2", accountId: "CHQ", posted: 1, amountCents: 100, description: "IN", raw: "{}", firstSeenAt: "x", lastSeenAt: "x" },
+    ]).run();
+    db.insert(transactionMeta).values({ transactionId: "tx-1", isTransfer: true, transferSource: "auto", counterpartTransactionId: "tx-2", updatedAt: "x" }).run();
+
+    db.delete(transactions).where(eq(transactions.id, "tx-2")).run();
+
+    const rows = db.select().from(transactionMeta).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].transactionId).toBe("tx-1");
+    expect(rows[0].counterpartTransactionId).toBeNull();
   });
   it("enforces one debt per linked transaction and case-insensitive unique category names", () => {
     const db = makeTestDb();
