@@ -236,6 +236,23 @@ describe("applyTagging recurring (6.3)", () => {
     expect(applyTagging(db).recurringMatched).toBe(0);
     expect(getMeta(db, "sp-2")).toBeUndefined();
   });
+  it("re-derives auto links every pass; a new row tying on distance wins on the smaller id", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    expect(applyTagging(db).recurringMatched).toBe(2);
+    expect(getMeta(db, "sp-2")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "auto" });
+    // Same due date, same distance (0 days): matchRecurring breaks the tie on the smaller id.
+    db.insert(transactions).values({
+      id: "sp-0", accountId: "CHQ", posted: Math.floor(Date.parse("2026-09-05T12:00:00Z") / 1000), transactedAt: null,
+      amountCents: -1299, description: "SPOTIFY P1234", payee: "Spotify AB", memo: null, pending: false, raw: "{}",
+      firstSeenAt: iso(4), lastSeenAt: iso(0), localDate: "2026-09-05",
+    }).run();
+    const r = applyTagging(db);
+    expect(r.recurringMatched).toBe(1);
+    expect(getMeta(db, "sp-0")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "auto" });
+    expect(getMeta(db, "sp-2")?.recurringCostId ?? null).toBeNull();
+    expect(getMeta(db, "sp-1")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "auto" });
+  });
   it("deactivating a cost drops its auto links and keeps a manual one", () => {
     const { spotifyId } = seedRecurring(db);
     seedRecurringTransactions(db);
