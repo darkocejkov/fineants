@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_TIMEZONE, isValidTimeZone, toLocalDate, todayLocal, addDays, daysBetween, localMidnightMs, isDateString } from "@/lib/time";
+import { DEFAULT_TIMEZONE, isValidTimeZone, toLocalDate, todayLocal, addDays, daysBetween, localMidnightMs, isDateString, daysInMonth, addMonths, monthKey, parseMonthKey, monthBounds } from "@/lib/time";
 
 const TZ = "America/Toronto";
 
@@ -65,5 +65,36 @@ describe("isValidTimeZone", () => {
     expect(isValidTimeZone("UTC")).toBe(true);
     expect(isValidTimeZone("Mars/Olympus")).toBe(false);
     expect(isValidTimeZone("")).toBe(false);
+  });
+});
+
+describe("month arithmetic", () => {
+  it("knows month lengths including leap years", () => {
+    expect(daysInMonth(2026, 2)).toBe(28);
+    expect(daysInMonth(2024, 2)).toBe(29);
+    expect(daysInMonth(2026, 12)).toBe(31);
+  });
+  it("adds months and clamps the day", () => {
+    expect(addMonths("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonths("2024-01-31", 1)).toBe("2024-02-29");
+    expect(addMonths("2026-03-31", -1)).toBe("2026-02-28");
+    expect(addMonths("2026-11-15", 2)).toBe("2027-01-15");
+    expect(addMonths("2026-05-31", 12)).toBe("2027-05-31");
+  });
+  it("parses and formats month keys", () => {
+    expect(monthKey("2026-09-09")).toBe("2026-09");
+    expect(parseMonthKey("2026-09")).toEqual({ year: 2026, month: 9 });
+    expect(parseMonthKey("2026-13")).toBeNull();
+    expect(parseMonthKey("2026-9")).toBeNull();
+  });
+  it("computes month bounds in the zone", () => {
+    const b = monthBounds(2026, 9, "America/Toronto");
+    expect(b.startDate).toBe("2026-09-01");
+    expect(b.endDate).toBe("2026-09-30");
+    expect(b.startSec).toBe(Date.UTC(2026, 8, 1, 4) / 1000); // EDT midnight
+    expect(b.endSec).toBe(Date.UTC(2026, 9, 1, 4) / 1000);
+    const f = monthBounds(2026, 2, "UTC");
+    expect(f.endDate).toBe("2026-02-28");
+    expect(f.endSec).toBe(Date.UTC(2026, 2, 1) / 1000);
   });
 });

@@ -104,3 +104,47 @@ export function localMidnightMs(date: string, tz: string): number {
   const second = guess - offsetMs(first, tz);
   return second;
 }
+
+const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Days in a month; `month` is 1–12. */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Calendar months added to a YYYY-MM-DD string; the day is clamped to the target month's length. */
+export function addMonths(date: string, n: number): string {
+  const [y, m, d] = split(date);
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = total - ny * 12 + 1;
+  return `${ny}-${pad2(nm)}-${pad2(Math.min(d, daysInMonth(ny, nm)))}`;
+}
+
+export function monthKey(date: string): string {
+  return date.slice(0, 7);
+}
+
+export function parseMonthKey(key: string): { year: number; month: number } | null {
+  if (!MONTH_KEY_RE.test(key)) return null;
+  const year = Number(key.slice(0, 4));
+  const month = Number(key.slice(5, 7));
+  if (month < 1 || month > 12) return null;
+  return { year, month };
+}
+
+/** First and last local date of the month, and the instants at which the month starts and ends in the zone. */
+export function monthBounds(year: number, month: number, tz: string): { startDate: string; endDate: string; startSec: number; endSec: number } {
+  const startDate = `${year}-${pad2(month)}-01`;
+  const endDate = `${year}-${pad2(month)}-${pad2(daysInMonth(year, month))}`;
+  return {
+    startDate,
+    endDate,
+    startSec: localMidnightMs(startDate, tz) / 1000,
+    endSec: localMidnightMs(addDays(endDate, 1), tz) / 1000,
+  };
+}
