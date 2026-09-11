@@ -259,7 +259,7 @@ describe("status and equivalents", () => {
     expect(monthlyEquivalentCents(1000, weekly)).toBe(4333);
     expect(monthlyEquivalentCents(1000, biweekly)).toBe(2167);
     expect(monthlyEquivalentCents(12000, yearly)).toBe(1000);
-    expect(monthlyEquivalentCents(4500, custom)).toBe(3043); // 4500 * (365.25/45) / 12
+    expect(monthlyEquivalentCents(4500, custom)).toBe(3044); // 4500 * (365.25/45) / 12 = 3043.75
   });
 });
 ```
@@ -464,7 +464,7 @@ describe("debtStatus precedence", () => {
     expect(debtStatus(payIn4, [], "2026-09-02")).toBe("overdue");
     expect(debtStatus(payIn4, [], "2026-08-25")).toBe("due_soon");
     expect(debtStatus(payIn4, [], "2026-08-01")).toBe("on_track");
-    expect(debtStatus(deferred, [], "2027-02-10")).toBe("due_soon"); // payoff within 14 days wins over interest
+    expect(debtStatus(deferred, [], "2027-02-20")).toBe("due_soon"); // payoff within 14 days wins over interest
     expect(debtStatus(deferred, [], "2027-02-01")).toBe("interest_starts_soon");
     expect(debtStatus(deferred, [], "2026-09-09")).toBe("on_track");
     expect(debtStatus(deferred, [], "2027-03-02")).toBe("overdue");
@@ -2949,12 +2949,9 @@ import { Amount } from "@/components/Amount";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusWord, type StatusTone } from "@/components/StatusWord";
 import { createDebtAction } from "./actions";
+import { DEBT_TONE, KIND_LABEL, CADENCE_LABEL } from "./labels";
 
 export const dynamic = "force-dynamic";
-
-export const DEBT_TONE: Record<DebtStatus, StatusTone> = { paid_off: "good", on_track: "good", due_soon: "attention", interest_starts_soon: "attention", overdue: "bad" };
-const KIND_LABEL: Record<DebtKind, string> = { bnpl: "buy now, pay later", loan: "loan", other: "other" };
-const CADENCE_LABEL: Record<Cadence, string> = { weekly: "every week", biweekly: "every two weeks", monthly: "every month", yearly: "every year", custom_days: "every N days" };
 
 export default async function DebtsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
@@ -3159,7 +3156,19 @@ export default async function DebtsPage({ searchParams }: { searchParams: Promis
 }
 ```
 
-Import `Fragment` from `react` at the top. Move `DEBT_TONE`, `KIND_LABEL`, `CADENCE_LABEL` to a small shared module `src/app/debts/labels.ts` (no `"use server"`, plain constants) so the detail page can import them without a page-to-page import; pages must not export non-page symbols.
+Import `Fragment` from `react` at the top. The label constants live in `src/app/debts/labels.ts` (plain constants, no `"use server"`), because pages must not export non-page symbols:
+
+```ts
+import type { Cadence, DebtKind } from "@/lib/db/schema";
+import type { DebtStatus } from "@/lib/debts/schedule";
+import type { StatusTone } from "@/components/StatusWord";
+
+export const DEBT_TONE: Record<DebtStatus, StatusTone> = { paid_off: "good", on_track: "good", due_soon: "attention", interest_starts_soon: "attention", overdue: "bad" };
+export const KIND_LABEL: Record<DebtKind, string> = { bnpl: "buy now, pay later", loan: "loan", other: "other" };
+export const CADENCE_LABEL: Record<Cadence, string> = { weekly: "every week", biweekly: "every two weeks", monthly: "every month", yearly: "every year", custom_days: "every N days" };
+```
+
+Drop the now-unused imports of `DEBT_KINDS`/`CADENCES` types that the constants needed from the list page if the page no longer references them directly (it still uses `DEBT_KINDS` and `CADENCES` for the form options).
 
 - [ ] **Step 3: Debt detail page**
 
