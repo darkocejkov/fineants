@@ -94,6 +94,11 @@ export function TransactionsTable({
                 <Amount cents={t.amountCents} currency={t.currency} />
               </td>
               <td className="row-actions">
+                {t.debtId ? (
+                  <Link className="row-action" href={`/debts/${t.debtId}`}>Pays {t.debtName}</Link>
+                ) : t.amountCents < 0 ? (
+                  <Link className="row-action" href={`/debts/link?tx=${encodeURIComponent(t.id)}&returnTo=${encodeURIComponent(returnTo)}`}>Set against a debt</Link>
+                ) : null}
                 <form action={setTransactionTransfer}>
                   <input type="hidden" name="id" value={t.id} />
                   <input type="hidden" name="returnTo" value={returnTo} />
