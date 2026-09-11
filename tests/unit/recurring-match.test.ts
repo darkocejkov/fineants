@@ -21,6 +21,13 @@ describe("matchRecurring", () => {
     expect(matchRecurring(spotify, [c("x", "2026-09-05", -1299, { hidden: true })])).toEqual([]);
     expect(matchRecurring(spotify, [c("x", "2026-09-05", -1299, { pending: true })])).toEqual([]);
   });
+  it("rounds the tolerance bounds outwards, as the pattern preview does", () => {
+    // 1299 ± 10% is 1169.1 … 1428.9; the preview widens to 1169 … 1429, so the pass must too.
+    expect(matchRecurring(spotify, [c("x", "2026-09-05", -1169)])).toHaveLength(1);
+    expect(matchRecurring(spotify, [c("x", "2026-09-05", -1168)])).toEqual([]);
+    expect(matchRecurring(spotify, [c("x", "2026-09-05", -1429)])).toHaveLength(1);
+    expect(matchRecurring(spotify, [c("x", "2026-09-05", -1430)])).toEqual([]);
+  });
   it("matches case-insensitively on payee or description", () => {
     expect(matchRecurring(spotify, [c("x", "2026-09-05", -1299, { payee: null, description: "spotify premium" })])).toHaveLength(1);
   });

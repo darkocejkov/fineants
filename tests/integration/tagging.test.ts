@@ -7,7 +7,7 @@ import type { Db } from "@/lib/db/client";
 import { accounts, transactions } from "@/lib/db/schema";
 import { createCategory } from "@/lib/queries/categories";
 import { createRule, deleteRule, updateRule } from "@/lib/queries/rules";
-import { deleteRecurringCost, updateRecurringCost } from "@/lib/queries/recurring";
+import { deleteRecurringCost, setRecurringActive, updateRecurringCost } from "@/lib/queries/recurring";
 import { applyTagging, applyRulesToOne, getLastTagging } from "@/lib/tagging/apply";
 import { getMeta, setCategory, clearCategoryOverride, setTransfer, setRecurring } from "@/lib/queries/meta";
 
@@ -214,5 +214,34 @@ describe("applyTagging recurring (6.3)", () => {
     deleteRecurringCost(db, spotifyId); // FK on delete set null clears recurring_cost_id
     applyTagging(db);
     expect(getMeta(db, "sp-2")).toBeUndefined();
+  });
+  it("a steady-state pass reports zero once a recurring category is applied", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    updateRecurringCost(db, spotifyId, { name: "Spotify", currency: "CAD", amountCents: 1299, cadence: "monthly", anchorOn: "2026-09-05", matchPattern: "spotify", categoryId: dining });
+    applyTagging(db);
+    // 6.1 clears the recurring category and 6.3 re-derives it every pass: bookkeeping, not work.
+    expect(applyTagging(db)).toMatchObject({ categorised: 0, categoryCleared: 0, recurringMatched: 0 });
+    expect(getMeta(db, "sp-2")).toMatchObject({ categoryId: dining, categorySource: "recurring" });
+  });
+  it("deleting a cost also clears a manual link left pointing at nothing", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    setRecurring(db, "sp-2", spotifyId);
+    deleteRecurringCost(db, spotifyId);
+    expect(applyTagging(db).recurringMatched).toBe(0);
+    expect(getMeta(db, "sp-2")).toBeUndefined();
+  });
+  it("deactivating a cost drops its auto links and keeps a manual one", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    expect(applyTagging(db).recurringMatched).toBe(2);
+    setRecurring(db, "sp-near", spotifyId);
+    setRecurringActive(db, spotifyId, false);
+    const r = applyTagging(db);
+    expect(r.recurringMatched).toBe(0);
+    expect(getMeta(db, "sp-1")).toBeUndefined();
+    expect(getMeta(db, "sp-2")).toBeUndefined();
+    expect(getMeta(db, "sp-near")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "manual" });
   });
 });

@@ -89,7 +89,10 @@ function applyRules(compiled: CompiledRule[], row: Loaded, d: Desired): { set: b
     const next = m.category ? m.category.categoryId : null;
     const nextRule = m.category ? m.category.id : null;
     if (next !== d.categoryId || nextRule !== d.ruleId) {
-      if (next === null && d.categoryId !== null) cleared = true;
+      // A `recurring` category is cleared here and re-derived by 6.3 in the same pass, so the
+      // clear is bookkeeping, not a change: counting it would make a steady-state pass report work
+      // it did not do. 6.3 counts the row in `categorised` if it really gains a category.
+      if (next === null && d.categoryId !== null && d.categorySource !== "recurring") cleared = true;
       if (next !== null && next !== d.categoryId) set = true;
       d.categoryId = next;
       d.ruleId = nextRule;
@@ -167,8 +170,11 @@ export function applyTagging(db: Db, opts: { now?: () => number } = {}): Tagging
     // links are untouched and occupy their period. A row that has no category after 6.1 borrows
     // the cost's category with source "recurring" (6.1 clears that source when it runs, so it is
     // re-derived here every pass).
-    const costs = listRecurringCosts(tx as unknown as Db).filter((c) => c.matchPattern && c.matchPattern.trim());
+    const costs = listRecurringCosts(tx).filter((c) => c.matchPattern && c.matchPattern.trim());
     for (const [, d] of desired) {
+      // A source with no cost behind it is a leftover of a deleted cost (the FK nulls the id but
+      // leaves the source): drop it, manual included, or the row keeps a link to nothing forever.
+      if (d.recurringCostId === null && d.recurringSource !== null) d.recurringSource = null;
       if (d.recurringSource === "auto") {
         d.recurringCostId = null;
         d.recurringSource = null;
@@ -194,6 +200,9 @@ export function applyTagging(db: Db, opts: { now?: () => number } = {}): Tagging
           d.categoryId = cost.categoryId;
           d.categorySource = "recurring";
           d.ruleId = null;
+          // Only a row that had no category at all gains one; re-deriving the category 6.1 just
+          // cleared is the other half of that bookkeeping and is not counted.
+          if (before.get(link.transactionId)!.categoryId === null) report.categorised++;
         }
       }
     }

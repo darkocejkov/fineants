@@ -62,7 +62,7 @@ function toRow(input: RecurringInput, nowIso: string) {
   };
 }
 
-export function listRecurringCosts(db: Db, opts: { includeInactive?: boolean } = {}): RecurringCostRow[] {
+export function listRecurringCosts(db: Pick<Db, "select">, opts: { includeInactive?: boolean } = {}): RecurringCostRow[] {
   const q = db.select().from(recurringCosts);
   return (opts.includeInactive ? q : q.where(eq(recurringCosts.active, true))).orderBy(asc(recurringCosts.name), asc(recurringCosts.id)).all();
 }

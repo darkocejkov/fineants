@@ -30,8 +30,10 @@ function textMatches(c: RecurringCandidate, needle: string): boolean {
 export function matchRecurring(cost: RecurringCostLike, candidates: RecurringCandidate[]): RecurringLink[] {
   const needle = cost.matchPattern?.trim().toLowerCase() ?? "";
   if (!needle) return [];
-  const lo = cost.amountCents * (1 - cost.matchToleranceBps / 10000);
-  const hi = cost.amountCents * (1 + cost.matchToleranceBps / 10000);
+  // Rounded outwards, exactly as previewPatternMatches does, so the preview and the pass agree on
+  // a transaction that sits on the boundary.
+  const lo = Math.floor(cost.amountCents * (1 - cost.matchToleranceBps / 10000));
+  const hi = Math.ceil(cost.amountCents * (1 + cost.matchToleranceBps / 10000));
 
   const taken = new Set<number>();
   for (const c of candidates) {
