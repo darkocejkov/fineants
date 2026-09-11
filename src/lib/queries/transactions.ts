@@ -1,11 +1,32 @@
-import { and, desc, eq, gte, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { accounts, transactions, type TransactionRow } from "../db/schema";
+import { accounts, categories, transactionMeta, transactions, type TransactionRow } from "../db/schema";
 
-export type TxFilter = { accountId?: string; q?: string; from?: string; to?: string; page?: number; pageSize?: number; includeHidden?: boolean };
-export type TxRow = TransactionRow & { accountName: string; currency: string; effectiveDate: number };
+export type TxFilter = {
+  accountId?: string;
+  q?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+  includeHidden?: boolean;
+  categoryId?: number | "none";
+  hideTransfers?: boolean;
+};
+export type TxRow = TransactionRow & {
+  accountName: string;
+  currency: string;
+  effectiveDate: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categorySource: "rule" | "recurring" | "manual" | null;
+  isTransfer: boolean;
+  transferSource: "auto" | "rule" | "manual" | null;
+};
 
 export const effectiveDate = sql<number>`coalesce(nullif(${transactions.posted}, 0), ${transactions.transactedAt}, unixepoch(${transactions.firstSeenAt}))`;
+/** True for rows that are not transfers (meta row absent counts as not a transfer). */
+export const notTransfer = sql`coalesce(${transactionMeta.isTransfer}, 0) = 0`;
 
 export function dateToUnix(date: string): number {
   return Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000);
@@ -39,6 +60,9 @@ function buildWhere(f: TxFilter): SQL | undefined {
   }
   if (f.from && isValidDate(f.from)) parts.push(gte(effectiveDate, dateToUnix(f.from)));
   if (f.to && isValidDate(f.to)) parts.push(lt(effectiveDate, dateToUnix(f.to) + 86400));
+  if (f.categoryId === "none") parts.push(isNull(transactionMeta.categoryId));
+  else if (typeof f.categoryId === "number") parts.push(eq(transactionMeta.categoryId, f.categoryId));
+  if (f.hideTransfers) parts.push(notTransfer);
   return and(...parts.filter(Boolean) as SQL[]);
 }
 
@@ -51,18 +75,41 @@ export function listTransactions(db: Db, f: TxFilter = {}): { rows: TxRow[]; tot
     .select({ n: sql<number>`count(*)`.mapWith(Number) })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .leftJoin(transactionMeta, eq(transactionMeta.transactionId, transactions.id))
     .where(where)
     .get()!.n;
   const rows = db
-    .select({ t: transactions, accountName: sql<string>`coalesce(nullif(trim(${accounts.nickname}), ''), ${accounts.name})`, currency: accounts.currency, effectiveDate })
+    .select({
+      t: transactions,
+      accountName: sql<string>`coalesce(nullif(trim(${accounts.nickname}), ''), ${accounts.name})`,
+      currency: accounts.currency,
+      effectiveDate,
+      categoryId: transactionMeta.categoryId,
+      categoryName: categories.name,
+      categorySource: transactionMeta.categorySource,
+      isTransfer: sql<boolean>`coalesce(${transactionMeta.isTransfer}, 0)`.mapWith(Boolean),
+      transferSource: transactionMeta.transferSource,
+    })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .leftJoin(transactionMeta, eq(transactionMeta.transactionId, transactions.id))
+    .leftJoin(categories, eq(categories.id, transactionMeta.categoryId))
     .where(where)
     .orderBy(desc(effectiveDate), desc(transactions.id))
     .limit(pageSize)
     .offset((page - 1) * pageSize)
     .all()
-    .map((r) => ({ ...r.t, accountName: r.accountName, currency: r.currency, effectiveDate: r.effectiveDate }));
+    .map((r) => ({
+      ...r.t,
+      accountName: r.accountName,
+      currency: r.currency,
+      effectiveDate: r.effectiveDate,
+      categoryId: r.categoryId ?? null,
+      categoryName: r.categoryName ?? null,
+      categorySource: r.categorySource ?? null,
+      isTransfer: r.isTransfer,
+      transferSource: r.transferSource ?? null,
+    }));
   return { rows, total, page, pageSize };
 }
 

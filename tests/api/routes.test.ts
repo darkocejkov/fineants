@@ -26,9 +26,9 @@ describe("buildSpending", () => {
   it("maps ranges to day windows", () => {
     const db = makeTestDb();
     seedBasic(db);
-    expect(buildSpending(db, "today", T0).days.filter((d) => d.currency === "CAD")).toEqual([{ date: "2026-09-09", currency: "CAD", outflowCents: 500, inflowCents: 0 }]);
-    expect(buildSpending(db, "7d", T0).days.filter((d) => d.currency === "CAD")).toHaveLength(4);
-    expect(buildSpending(db, "30d", T0).topPayees[0].label).toBe("Gas");
+    expect(buildSpending(db, "today", { tz: "UTC", nowMs: T0 }).days.filter((d) => d.currency === "CAD")).toEqual([{ date: "2026-09-09", currency: "CAD", outflowCents: 500, inflowCents: 0 }]);
+    expect(buildSpending(db, "7d", { tz: "UTC", nowMs: T0 }).days.filter((d) => d.currency === "CAD")).toHaveLength(4);
+    expect(buildSpending(db, "30d", { tz: "UTC", nowMs: T0 }).topPayees[0].label).toBe("Gas");
   });
 
   // The payload is a published contract (README, spec §11, phase 3's Magic Frame), so the
@@ -36,7 +36,7 @@ describe("buildSpending", () => {
   it("names every day row's fields date, currency, outflowCents, inflowCents", () => {
     const db = makeTestDb();
     seedBasic(db);
-    const payload = buildSpending(db, "7d", T0);
+    const payload = buildSpending(db, "7d", { tz: "UTC", nowMs: T0 });
     expect(Object.keys(payload)).toEqual(["range", "days", "topPayees"]);
     expect(payload.days.length).toBeGreaterThan(0);
     for (const day of payload.days) {
@@ -45,7 +45,7 @@ describe("buildSpending", () => {
     }
   });
 
-  it("keeps today's payees aligned to the UTC calendar day, not a rolling 24h window", () => {
+  it("keeps today's payees aligned to the local calendar day, not a rolling 24h window", () => {
     const db = makeTestDb();
     seedBasic(db);
     // T0 is 2026-09-09T12:00Z; 23 hours earlier is 2026-09-08T13:00Z — within a rolling 24h
@@ -66,10 +66,11 @@ describe("buildSpending", () => {
         raw: "{}",
         firstSeenAt: new Date(yesterdayMs).toISOString(),
         lastSeenAt: new Date(T0).toISOString(),
+        localDate: new Date(yesterdayMs).toISOString().slice(0, 10),
       })
       .run();
 
-    expect(buildSpending(db, "today", T0).topPayees.some((p) => p.label === "Night Owl")).toBe(false);
-    expect(buildSpending(db, "7d", T0).topPayees.some((p) => p.label === "Night Owl")).toBe(true);
+    expect(buildSpending(db, "today", { tz: "UTC", nowMs: T0 }).topPayees.some((p) => p.label === "Night Owl")).toBe(false);
+    expect(buildSpending(db, "7d", { tz: "UTC", nowMs: T0 }).topPayees.some((p) => p.label === "Night Owl")).toBe(true);
   });
 });

@@ -1,14 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { makeTestDb } from "../helpers/db";
-import { seedBasic, T0 } from "../helpers/seed";
+import { seedBasic, seedTransferPair, T0 } from "../helpers/seed";
 import type { Db } from "@/lib/db/client";
 import { listAccounts, getAccount, totalsByCurrency, updateAccountSettings, displayName } from "@/lib/queries/accounts";
 import { accountBalanceSeries, netWorthSeries } from "@/lib/queries/balances";
 import { listTransactions, recentTransactions } from "@/lib/queries/transactions";
-import { spendingByPeriod, topPayees } from "@/lib/queries/spending";
+import { spendingByPeriod, topPayees, spendingByCategory } from "@/lib/queries/spending";
 import { listSyncRuns, getSyncRun, getSyncStatus } from "@/lib/queries/syncRuns";
 import { setState, STATE_KEYS } from "@/lib/db/appState";
 import { accounts, balanceSnapshots, connections, syncRuns, transactions } from "@/lib/db/schema";
+import { createCategory } from "@/lib/queries/categories";
+import { setCategory, setTransfer } from "@/lib/queries/meta";
+
+const TODAY = "2026-09-09";
 
 let db: Db;
 let runId: number;
@@ -140,7 +144,7 @@ describe("transactions", () => {
 
 describe("spending", () => {
   it("groups by day with outflow and inflow, excluding hidden accounts", () => {
-    const rows = spendingByPeriod(db, { days: 7, granularity: "day", nowMs: T0 });
+    const rows = spendingByPeriod(db, { days: 7, granularity: "day", today: TODAY });
     const cad = rows.filter((r) => r.currency === "CAD");
     expect(cad).toEqual([
       { period: "2026-09-06", currency: "CAD", outflowCents: 0, inflowCents: 250000 },
@@ -151,7 +155,7 @@ describe("spending", () => {
     expect(rows.find((r) => r.currency === "USD")).toEqual({ period: "2026-09-04", currency: "USD", outflowCents: 1000, inflowCents: 0 });
   });
   it("groups by month", () => {
-    const rows = spendingByPeriod(db, { days: 60, granularity: "month", nowMs: T0 }).filter((r) => r.currency === "CAD");
+    const rows = spendingByPeriod(db, { days: 60, granularity: "month", today: TODAY }).filter((r) => r.currency === "CAD");
     expect(rows).toEqual([
       { period: "2026-07", currency: "CAD", outflowCents: 30000, inflowCents: 0 },
       { period: "2026-08", currency: "CAD", outflowCents: 8000, inflowCents: 0 },
@@ -159,18 +163,75 @@ describe("spending", () => {
     ]);
   });
   it("groups by ISO week", () => {
-    const rows = spendingByPeriod(db, { days: 7, granularity: "week", nowMs: T0 }).filter((r) => r.currency === "CAD");
+    const rows = spendingByPeriod(db, { days: 7, granularity: "week", today: TODAY }).filter((r) => r.currency === "CAD");
     expect(rows.map((r) => r.period)).toEqual(["2026-W36", "2026-W37"]);
   });
   it("ranks payees by outflow", () => {
-    const top = topPayees(db, { days: 30, limit: 2, nowMs: T0 });
+    const top = topPayees(db, { days: 30, limit: 2, today: TODAY });
     expect(top[0]).toEqual({ label: "Gas", currency: "CAD", outflowCents: 8000, count: 1 });
     expect(top[1]).toEqual({ label: "Grocery Mart", currency: "CAD", outflowCents: 4510, count: 1 });
   });
   it("ranks payees per currency rather than globally", () => {
-    const top = topPayees(db, { days: 30, limit: 1, nowMs: T0 });
+    const top = topPayees(db, { days: 30, limit: 1, today: TODAY });
     expect(top.find((t) => t.currency === "CAD")).toEqual({ label: "Gas", currency: "CAD", outflowCents: 8000, count: 1 });
     expect(top.find((t) => t.currency === "USD")).toEqual({ label: "Usd Shop", currency: "USD", outflowCents: 1000, count: 1 });
+  });
+});
+
+describe("transactions with meta", () => {
+  it("joins category and transfer state, hides transfers when asked", () => {
+    seedTransferPair(db);
+    const cat = createCategory(db, { name: "Groceries", kind: "expense" });
+    setCategory(db, "t1", cat.id);
+    setTransfer(db, "xfer-out", true);
+    const all = listTransactions(db, { pageSize: 100 }).rows;
+    const t1 = all.find((r) => r.id === "t1")!;
+    expect(t1).toMatchObject({ categoryId: cat.id, categoryName: "Groceries", categorySource: "manual", isTransfer: false, localDate: "2026-09-08" });
+    expect(all.find((r) => r.id === "xfer-out")).toMatchObject({ isTransfer: true, transferSource: "manual" });
+    const hidden = listTransactions(db, { pageSize: 100, hideTransfers: true }).rows;
+    expect(hidden.find((r) => r.id === "xfer-out")).toBeUndefined();
+    expect(hidden.length).toBe(all.length - 1);
+  });
+  it("filters by category and by 'none'", () => {
+    const cat = createCategory(db, { name: "Groceries", kind: "expense" });
+    setCategory(db, "t1", cat.id);
+    expect(listTransactions(db, { categoryId: cat.id }).rows.map((r) => r.id)).toEqual(["t1"]);
+    const none = listTransactions(db, { categoryId: "none", pageSize: 100 }).rows.map((r) => r.id);
+    expect(none).not.toContain("t1");
+    expect(none).toContain("t2");
+  });
+});
+
+describe("spending by local_date", () => {
+  it("buckets by local day and excludes transfers", () => {
+    seedTransferPair(db);
+    setTransfer(db, "xfer-out", true);
+    const rows = spendingByPeriod(db, { days: 30, granularity: "day", today: TODAY }).filter((r) => r.currency === "CAD");
+    const day5 = rows.find((r) => r.period === "2026-09-04");
+    expect(day5).toBeUndefined(); // the only CAD activity on that day was the transfer out
+    expect(rows.find((r) => r.period === "2026-09-08")).toMatchObject({ outflowCents: 4510 });
+  });
+  it("month granularity uses YYYY-MM and week uses ISO weeks", () => {
+    const m = spendingByPeriod(db, { days: 60, granularity: "month", today: TODAY }).filter((r) => r.currency === "CAD");
+    expect(m.map((r) => r.period)).toEqual(["2026-07", "2026-08", "2026-09"]);
+    const w = spendingByPeriod(db, { days: 7, granularity: "week", today: TODAY }).filter((r) => r.currency === "CAD");
+    expect(w[0].period).toMatch(/^2026-W\d\d$/);
+  });
+  it("topPayees excludes transfers and respects sinceDate", () => {
+    seedTransferPair(db);
+    setTransfer(db, "xfer-out", true);
+    const p = topPayees(db, { days: 30, today: TODAY });
+    expect(p.map((x) => x.label)).not.toContain("TRANSFER TO SAVINGS");
+    expect(topPayees(db, { days: 30, today: TODAY, sinceDate: TODAY }).filter((x) => x.currency === "CAD").map((x) => x.label)).toEqual(["Snack"]);
+  });
+  it("spendingByCategory groups outflows with Uncategorised for null", () => {
+    const cat = createCategory(db, { name: "Groceries", kind: "expense" });
+    setCategory(db, "t1", cat.id);
+    const rows = spendingByCategory(db, { sinceDate: "2026-08-10" }).filter((r) => r.currency === "CAD");
+    expect(rows[0]).toMatchObject({ categoryId: null, name: "Uncategorised" });
+    expect(rows.find((r) => r.categoryId === cat.id)).toMatchObject({ outflowCents: 4510, count: 1 });
+    const uncategorised = rows.find((r) => r.categoryId === null)!;
+    expect(uncategorised.outflowCents).toBe(1200 + 8000 + 500); // t2, t4, t7 (pending counts), not t6 (hidden)
   });
 });
 

@@ -4,6 +4,8 @@ import { first, type SearchParams } from "@/lib/searchParams";
 import { listAccounts } from "@/lib/queries/accounts";
 import { spendingByPeriod, topPayees, type Granularity } from "@/lib/queries/spending";
 import { unixToDate } from "@/lib/format";
+import { loadConfig } from "@/lib/config";
+import { todayLocal } from "@/lib/time";
 import { Amount } from "@/components/Amount";
 import { EmptyState, NoAccountsEmptyState } from "@/components/EmptyState";
 import { SpendingChart } from "@/components/charts/SpendingChart";
@@ -41,10 +43,11 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
   const granularity: Granularity = gParam && GRANULARITIES.includes(gParam) ? gParam : range.g;
 
   const db = getDb();
+  const today = todayLocal(loadConfig().timezone);
   // Nothing has ever synced, so the range selector cannot be widened into any data.
   const neverSynced = listAccounts(db, { includeHidden: true }).length === 0;
   const since = rangeStart(range.days);
-  const all = spendingByPeriod(db, { days: range.days, granularity });
+  const all = spendingByPeriod(db, { days: range.days, granularity, today });
   const currencies = [...new Set(all.map((r) => r.currency))];
   const outflowByCurrency = new Map<string, number>();
   for (const r of all) outflowByCurrency.set(r.currency, (outflowByCurrency.get(r.currency) ?? 0) + r.outflowCents);
@@ -55,7 +58,7 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
   const rows = all.filter((r) => r.currency === currency);
   const totalOut = rows.reduce((n, r) => n + r.outflowCents, 0);
   const totalIn = rows.reduce((n, r) => n + r.inflowCents, 0);
-  const payees = topPayees(db, { days: range.days, limit: 10 }).filter((p) => p.currency === currency);
+  const payees = topPayees(db, { days: range.days, today, limit: 10 }).filter((p) => p.currency === currency);
   const words = PERIOD_WORDS[granularity];
   const periodCount = `${rows.length} ${rows.length === 1 ? words.one : words.many} with activity`;
 
