@@ -2,10 +2,9 @@ import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { first, type SearchParams } from "@/lib/searchParams";
 import { listAccounts } from "@/lib/queries/accounts";
-import { spendingByPeriod, topPayees, type Granularity } from "@/lib/queries/spending";
-import { unixToDate } from "@/lib/format";
+import { spendingByPeriod, topPayees, spendingByCategory, type Granularity } from "@/lib/queries/spending";
 import { loadConfig } from "@/lib/config";
-import { todayLocal } from "@/lib/time";
+import { addDays, todayLocal } from "@/lib/time";
 import { Amount } from "@/components/Amount";
 import { EmptyState, NoAccountsEmptyState } from "@/components/EmptyState";
 import { SpendingChart } from "@/components/charts/SpendingChart";
@@ -29,11 +28,6 @@ const PERIOD_WORDS: Record<Granularity, { one: string; many: string }> = {
   month: { one: "month", many: "months" },
 };
 
-/** The first day the queries count, printed for the meta line. The clock stays out of render. */
-function rangeStart(days: number): string {
-  return unixToDate(Math.floor(Date.now() / 1000) - days * 86400);
-}
-
 export default async function SpendingPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
   const rangeParam = first(sp.range);
@@ -43,10 +37,11 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
   const granularity: Granularity = gParam && GRANULARITIES.includes(gParam) ? gParam : range.g;
 
   const db = getDb();
-  const today = todayLocal(loadConfig().timezone);
+  const tz = loadConfig().timezone;
+  const today = todayLocal(tz);
   // Nothing has ever synced, so the range selector cannot be widened into any data.
   const neverSynced = listAccounts(db, { includeHidden: true }).length === 0;
-  const since = rangeStart(range.days);
+  const since = addDays(today, -range.days);
   const all = spendingByPeriod(db, { days: range.days, granularity, today });
   const currencies = [...new Set(all.map((r) => r.currency))];
   const outflowByCurrency = new Map<string, number>();
@@ -59,6 +54,7 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
   const totalOut = rows.reduce((n, r) => n + r.outflowCents, 0);
   const totalIn = rows.reduce((n, r) => n + r.inflowCents, 0);
   const payees = topPayees(db, { days: range.days, today, limit: 10 }).filter((p) => p.currency === currency);
+  const byCategory = spendingByCategory(db, { sinceDate: since }).filter((c) => c.currency === currency);
   const words = PERIOD_WORDS[granularity];
   const periodCount = `${rows.length} ${rows.length === 1 ? words.one : words.many} with activity`;
 
@@ -154,6 +150,41 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
 
           <section className="section">
             <div className="section-head">
+              <h2 className="section-title">By category</h2>
+              <p className="section-meta">largest first</p>
+            </div>
+            {byCategory.length === 0 ? (
+              <EmptyState title="Nothing went out in this range." />
+            ) : (
+              <div className="ledger-scroll">
+                <table className="ledger">
+                  <thead>
+                    <tr>
+                      <th scope="col">Category</th>
+                      <th scope="col" className="ledger-num">Transactions</th>
+                      <th scope="col" className="ledger-num">Spent</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byCategory.map((c) => (
+                      <tr key={c.categoryId ?? "none"}>
+                        <td>
+                          <Link href={`/transactions?category=${c.categoryId ?? "none"}&from=${since}&to=${today}`}>{c.name}</Link>
+                        </td>
+                        <td className="ledger-num">{c.count}</td>
+                        <td className="ledger-num">
+                          <Amount cents={c.outflowCents} currency={currency} signColour={false} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="section">
+            <div className="section-head">
               <h2 className="section-title">Top payees</h2>
               <p className="section-meta">up to 10, largest first</p>
             </div>
@@ -194,9 +225,9 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
           </section>
 
           <p className="footnote">
-            Transfers between your own accounts and credit-card payments are counted as spending for now. Transfer
-            detection and categories arrive in phase 2. Hidden accounts are excluded. Periods with no activity are left
-            out of the chart. Days and dates are in UTC.
+            Transfers between your own accounts are left out. Hidden accounts are excluded. Periods with no activity are
+            left out of the chart. Days and months follow {tz}. Uncategorised spending is listed by category as
+            &ldquo;Uncategorised&rdquo;; add rules under Settings to sort it.
           </p>
         </>
       ) : null}
