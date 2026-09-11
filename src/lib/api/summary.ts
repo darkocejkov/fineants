@@ -2,7 +2,10 @@ import type { Db } from "../db/client";
 import { listAccounts, totalsByCurrency, displayName } from "../queries/accounts";
 import { getSyncStatus } from "../queries/syncRuns";
 import { spendingByCategory, spendingByPeriod, topPayees } from "../queries/spending";
-import { addDays, todayLocal } from "../time";
+import { addDays, todayLocal, parseMonthKey, monthKey } from "../time";
+import { totalsRemainingByCurrency, upcomingDebts, type UpcomingDebt } from "../queries/debts";
+import { upcomingRecurring, type UpcomingRecurring } from "../queries/recurring";
+import { budgetMonth } from "../budget/month";
 
 export type SummaryPayload = {
   generatedAt: string;
@@ -10,17 +13,39 @@ export type SummaryPayload = {
   credentialsInvalid: boolean;
   totals: { currency: string; balanceCents: number }[];
   accounts: { id: string; name: string; type: string | null; currency: string; balanceCents: number; balanceDate: number }[];
+  debts: { remaining: { currency: string; remainingCents: number }[]; open: number };
+  budget: { month: string; totals: { currency: string; capCents: number; spentCents: number }[] };
 };
 
-export function buildSummary(db: Db, nowMs = Date.now()): SummaryPayload {
+export function buildSummary(db: Db, opts: { tz: string; nowMs?: number }): SummaryPayload {
+  const nowMs = opts.nowMs ?? Date.now();
+  const today = todayLocal(opts.tz, nowMs);
+  const { year, month } = parseMonthKey(monthKey(today))!;
   const status = getSyncStatus(db);
+  const debtTotals = totalsRemainingByCurrency(db);
+  const b = budgetMonth(db, { year, month, tz: opts.tz, today });
   return {
     generatedAt: new Date(nowMs).toISOString(),
     lastSync: status.latest ? { finishedAt: status.latest.finishedAt, status: status.latest.status } : null,
     credentialsInvalid: Boolean(status.credentialsInvalid),
     totals: totalsByCurrency(db),
     accounts: listAccounts(db).map((a) => ({ id: a.id, name: displayName(a), type: a.type, currency: a.currency, balanceCents: a.balanceCents, balanceDate: a.balanceDate })),
+    debts: { remaining: debtTotals.map(({ currency, remainingCents }) => ({ currency, remainingCents })), open: debtTotals.reduce((n, t) => n + t.open, 0) },
+    budget: { month: b.key, totals: b.totals },
   };
+}
+
+export const UPCOMING_MAX_DAYS = 60;
+export const UPCOMING_DEFAULT_DAYS = 7;
+export type UpcomingItem = UpcomingRecurring | UpcomingDebt;
+export type UpcomingPayload = { generatedAt: string; today: string; days: number; items: UpcomingItem[] };
+
+export function buildUpcoming(db: Db, opts: { tz: string; days: number; nowMs?: number }): UpcomingPayload {
+  const nowMs = opts.nowMs ?? Date.now();
+  const today = todayLocal(opts.tz, nowMs);
+  const items: UpcomingItem[] = [...upcomingRecurring(db, { today, days: opts.days }), ...upcomingDebts(db, { today, days: opts.days })];
+  items.sort((a, b) => (a.dueOn < b.dueOn ? -1 : a.dueOn > b.dueOn ? 1 : a.name.localeCompare(b.name)));
+  return { generatedAt: new Date(nowMs).toISOString(), today, days: opts.days, items };
 }
 
 export type SpendingRange = "today" | "7d" | "30d";

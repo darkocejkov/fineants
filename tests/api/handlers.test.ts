@@ -29,6 +29,7 @@ import { POST } from "@/app/api/sync/route";
 import { POST as tagPOST } from "@/app/api/tag/route";
 import { GET as summaryGET } from "@/app/api/v1/summary/route";
 import { GET as spendingGET } from "@/app/api/v1/spending/route";
+import { GET as upcomingGET } from "@/app/api/v1/upcoming/route";
 
 const baseConfig = { apiKey: "k", databasePath: ":memory:", syncIntervalHours: 6, backfillDays: 365, port: 3000, timezone: "America/Toronto" };
 
@@ -78,6 +79,29 @@ describe("route handlers", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.range).toBe("7d");
+    });
+  });
+
+  describe("GET /api/v1/upcoming", () => {
+    it("rejects without a key", async () => {
+      vi.mocked(loadConfig).mockReturnValue(baseConfig);
+      expect((await upcomingGET(req("http://x/api/v1/upcoming"))).status).toBe(401);
+    });
+    it("validates days", async () => {
+      vi.mocked(loadConfig).mockReturnValue(baseConfig);
+      vi.mocked(getDb).mockReturnValue(createDb(":memory:"));
+      for (const bad of ["0", "61", "abc", "2.5"]) {
+        const res = await upcomingGET(req(`http://x/api/v1/upcoming?days=${bad}`, { headers: { "x-api-key": "k" } }));
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({ error: "days must be a whole number from 1 to 60" });
+      }
+    });
+    it("defaults to 7 days and returns the payload", async () => {
+      vi.mocked(loadConfig).mockReturnValue(baseConfig);
+      vi.mocked(getDb).mockReturnValue(createDb(":memory:"));
+      const res = await upcomingGET(req("http://x/api/v1/upcoming", { headers: { "x-api-key": "k" } }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ days: 7, items: [] });
     });
   });
 

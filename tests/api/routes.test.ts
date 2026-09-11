@@ -1,16 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { makeTestDb } from "../helpers/db";
 import { seedBasic, seedTransferPair, T0 } from "../helpers/seed";
-import { buildSummary, buildSpending } from "@/lib/api/summary";
+import { seedDebts, seedRecurring } from "../helpers/seed2b";
+import { buildSummary, buildSpending, buildUpcoming } from "@/lib/api/summary";
 import { transactions } from "@/lib/db/schema";
 import { setTransfer, setCategory } from "@/lib/queries/meta";
-import { createCategory } from "@/lib/queries/categories";
+import { createCategory, updateCategory } from "@/lib/queries/categories";
 
 describe("buildSummary", () => {
   it("returns totals, visible accounts, and last sync", () => {
     const db = makeTestDb();
     seedBasic(db);
-    const s = buildSummary(db, T0);
+    const s = buildSummary(db, { tz: "UTC", nowMs: T0 });
     expect(s.totals).toEqual([{ currency: "CAD", balanceCents: 50000 }, { currency: "USD", balanceCents: 250000 }]);
     expect(s.accounts.map((a) => a.id)).toEqual(["CHQ", "USD", "VISA"]);
     expect(s.accounts[2]).toMatchObject({ name: "Visa", type: "credit", balanceCents: -50000 });
@@ -19,8 +20,46 @@ describe("buildSummary", () => {
     expect(s.generatedAt).toBe(new Date(T0).toISOString());
   });
   it("handles an empty database", () => {
-    const s = buildSummary(makeTestDb(), T0);
+    const s = buildSummary(makeTestDb(), { tz: "UTC", nowMs: T0 });
     expect(s).toMatchObject({ totals: [], accounts: [], lastSync: null });
+  });
+});
+
+describe("buildSummary phase 2", () => {
+  it("adds debts and the budget month", () => {
+    const db = makeTestDb();
+    seedBasic(db);
+    seedDebts(db);
+    const g = createCategory(db, { name: "Groceries", kind: "expense" }).id;
+    updateCategory(db, g, { monthlyCapCents: 10000, capCurrency: "CAD" });
+    setCategory(db, "t1", g);
+    const s = buildSummary(db, { tz: "UTC", nowMs: T0 });
+    expect(s.debts).toEqual({ remaining: [{ currency: "CAD", remainingCents: 1530000 }], open: 2 });
+    expect(s.budget).toEqual({ month: "2026-09", totals: [{ currency: "CAD", capCents: 10000, spentCents: 4510 }] });
+  });
+  it("empty database", () => {
+    const s = buildSummary(makeTestDb(), { tz: "UTC", nowMs: T0 });
+    expect(s.debts).toEqual({ remaining: [], open: 0 });
+    expect(s.budget.totals).toEqual([]);
+  });
+});
+
+describe("buildUpcoming", () => {
+  it("merges recurring and debt items sorted by due date", () => {
+    const db = makeTestDb();
+    seedBasic(db);
+    seedRecurring(db);
+    seedDebts(db);
+    const u = buildUpcoming(db, { tz: "UTC", days: 7, nowMs: T0 });
+    expect(u.today).toBe("2026-09-09");
+    expect(u.days).toBe(7);
+    expect(u.items.map((i) => [i.kind, i.name, i.dueOn])).toEqual([
+      ["recurring", "Rent", "2026-09-01"],
+      ["recurring", "Spotify", "2026-09-05"],
+      ["debt", "Couch", "2026-09-15"],
+      ["debt", "Student loan", "2026-09-15"],
+    ]);
+    expect(Object.keys(u)).toEqual(["generatedAt", "today", "days", "items"]);
   });
 });
 

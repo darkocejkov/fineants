@@ -7,7 +7,8 @@ import { buildSummary } from "@/lib/api/summary";
 export const dynamic = "force-dynamic";
 
 export const GET = withApiErrors(async (req: Request) => {
-  const auth = authorise(req, loadConfig());
+  const config = loadConfig();
+  const auth = authorise(req, config);
   if (!auth.ok) return unauthorised(auth);
-  return Response.json(buildSummary(getDb()));
+  return Response.json(buildSummary(getDb(), { tz: config.timezone }));
 });
