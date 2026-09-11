@@ -71,6 +71,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                         </label>
                         <div className="filter-actions">
                           <button className="button button-primary" type="submit">Save</button>
+                          {" "}
                           {saved === String(c.id) ? <span className="small">Saved</span> : null}
                         </div>
                       </form>

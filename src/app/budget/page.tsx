@@ -102,6 +102,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
                         <input type="hidden" name="capCurrency" value={c.currency} />
                         <input name="cap" inputMode="decimal" defaultValue={(c.capCents / 100).toFixed(2)} aria-label={`Monthly cap for ${c.name}`} className="inline-select" />
                         <button type="submit" className="row-action">Save cap</button>
+                        {" "}
                         {saved === String(c.categoryId) ? <span className="small">Saved</span> : null}
                       </form>
                     </td>

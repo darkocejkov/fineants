@@ -248,6 +248,7 @@ export default async function RecurringPage({ searchParams }: { searchParams: Pr
           <div className="form-actions">
             <button className="button button-primary" type="submit">{editing ? "Save recurring cost" : "Add recurring cost"}</button>
             <button className="button" type="submit" formAction="/recurring" formMethod="get" name="preview" value="1">Preview matches</button>
+            {" "}
             {saved ? <span className="small">Saved</span> : null}
           </div>
           {preview ? (
@@ -272,7 +273,7 @@ export default async function RecurringPage({ searchParams }: { searchParams: Pr
       </section>
 
       <p className="footnote">
-        A commitment is paid for a period when a matching transaction lands from a week before its due date until a week before the next one.
+        A commitment is paid for a period when a matching transaction lands shortly before its due date — a week, or half the gap between due dates for short cadences — and before the next period opens.
         Matching uses the text and a tolerance around the expected amount. Monthly figures normalise weekly and yearly costs to a month.
       </p>
     </>

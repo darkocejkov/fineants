@@ -210,6 +210,7 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
             <button className="button" type="submit" formAction="/settings/rules" formMethod="get" name="preview" value="1">
               Preview matches
             </button>
+            {" "}
             {saved ? <span className="small">Saved</span> : null}
           </div>
           {previewProblem ? <p className="form-error">{previewProblem}</p> : null}

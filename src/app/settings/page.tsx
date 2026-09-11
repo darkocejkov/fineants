@@ -171,6 +171,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <button className="button button-primary" type="submit">
                   Save
                 </button>
+                {" "}
                 {saved === a.id ? <span className="small">Saved</span> : null}
               </div>
             </form>
