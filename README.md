@@ -31,7 +31,7 @@ The container starts as root only long enough to make `/data` writable by its ow
 All routes need header `x-api-key: $API_KEY`.
 
 - `POST /api/sync[?force=1]` — run a sync now (409 if one ran under 30 minutes ago, 503 if credentials are invalid or missing).
-- `GET /api/v1/summary` — balances per account and per currency, last sync status. Amounts are integer cents.
+- `GET /api/v1/summary` — balances per account and per currency, last sync status, debts remaining by currency, and this month's budget totals (spent vs cap). Amounts are integer cents.
 - `GET /api/v1/spending?range=today|7d|30d` — daily outflow/inflow, top payees and outflow by category, one row per local day per currency:
   ```json
   {
@@ -42,7 +42,19 @@ All routes need header `x-api-key: $API_KEY`.
   }
   ```
   Rows are per calendar day in `TIMEZONE`; transfers between your own accounts are excluded; `byCategory` lists outflow per category, `Uncategorised` for none.
-- `POST /api/tag` — re-run categorisation rules and transfer detection; returns counts.
+- `GET /api/v1/upcoming?days=7` — recurring costs and debts due within `days` (1–60, default 7), sorted by due date:
+  ```json
+  {
+    "generatedAt": "2026-09-11T00:00:00.000Z",
+    "today": "2026-09-11",
+    "days": 7,
+    "items": [
+      { "kind": "recurring", "id": 1, "name": "Streaming service", "currency": "CAD", "amountCents": 1599, "dueOn": "2026-09-14", "status": "due" },
+      { "kind": "debt", "id": 2, "name": "Laptop", "currency": "CAD", "amountCents": 12000, "dueOn": "2026-09-16", "status": "on_track" }
+    ]
+  }
+  ```
+- `POST /api/tag` — re-run categorisation rules, transfer detection and recurring-cost matching; returns counts.
 
 ## Scripts
 
@@ -57,7 +69,19 @@ All routes need header `x-api-key: $API_KEY`.
 
 ## Categories and rules
 
-Rules are ordered; the first match wins, and they re-apply to every transaction whenever you add, edit, reorder or delete one. Picking a category by hand in the transaction list pins it, overriding rules until you choose "Use rules again" from the same select. Manage rules, including a "Preview matches" check before saving, under Settings → Rules.
+Rules are ordered; the first match wins, and they re-apply to every transaction whenever you add, edit, reorder or delete one. Picking a category by hand in the transaction list pins it, overriding rules until you choose "Use rules again" from the same select. Manage rules, including a "Preview matches" check before saving, under Settings → Rules. The same pass also re-links recurring costs to matching transactions, counted as `recurringMatched` in the tagging report.
+
+## Budget
+
+Set a monthly cap per category, on `/budget` itself or under Settings → Categories. The page shows what each capped category has spent against its cap this month, plus uncapped and uncategorised spend. Pace compares spend so far against the cap times how far the month has run, so a category reads on pace, ahead of pace, or over before the month is out.
+
+## Recurring costs
+
+Add a recurring cost with a cadence (weekly, every two weeks, monthly, yearly, or a custom number of days), an anchor date, and an optional match pattern with a tolerance so matching transactions link to it automatically and, when a transaction has no category of its own, hand it one. `/recurring` lists each cost's cadence, next due date, and status — paid, due, or overdue — with the monthly-equivalent cost so weekly and yearly commitments compare on one footing.
+
+## Debts
+
+Record a debt as buy now pay later, a loan, or other, with either an instalment schedule or a payoff date. Log a payment by hand, or link an existing transaction to it — from the debt's own page or from the transaction's row — and a transaction can pay at most one debt. `/debts` groups debts by lender and totals what's still owed by currency; debts are never counted in net worth.
 
 ## Per-bank sync state
 

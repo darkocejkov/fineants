@@ -264,8 +264,8 @@ reported.
 
 Writes: if `category_source` is not `manual`, set `category_id`/`rule_id` to the winner with
 `category_source = rule`, or null all three when no rule matches (clearing counts as
-`categoryCleared` when a value was removed; a `recurring`-sourced category is treated the same
-way and may be re-set by step 6.3 in the same pass). If `transfer_source` is not `manual`: when
+`categoryCleared` when a value was removed; a `recurring`-sourced category cleared here and
+re-set by step 6.3 in the same pass is not counted in the report). If `transfer_source` is not `manual`: when
 a rule with `mark_transfer` matches, set `is_transfer = 1, transfer_source = rule, counterpart
 null`; when none matches and the previous source was `rule`, clear it. `auto` values are left
 for step 6.2, which recomputes them.
@@ -528,6 +528,6 @@ direction in the task review (as in phase 1).
 
 1. Phase 1: sync, storage, explorer, dashboards, minimal API. Done 2026-09-10.
 2. **Phase 2 (this spec)**: categories and rules, transfers, budgets, recurring costs, debts,
-   timezone, per-connection watermarks, housekeeping.
+   timezone, per-connection watermarks, housekeeping. Done 2026-09-11.
 3. Phase 3: Magic Frame module polling `/api/v1/summary`, `/api/v1/spending`, `/api/v1/upcoming`;
    reminder texts; decision on debts in net worth; richer daily summary.

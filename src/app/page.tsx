@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db/client";
+import { loadConfig } from "@/lib/config";
 import { listAccounts, totalsByCurrency, displayName } from "@/lib/queries/accounts";
 import { netWorthSeries } from "@/lib/queries/balances";
 import { recentTransactions } from "@/lib/queries/transactions";
 import { getSyncStatus, type SyncStatus } from "@/lib/queries/syncRuns";
+import { totalsRemainingByCurrency, upcomingDebts } from "@/lib/queries/debts";
+import { upcomingRecurring } from "@/lib/queries/recurring";
+import { budgetMonth } from "@/lib/budget/month";
+import { todayLocal, parseMonthKey, monthKey } from "@/lib/time";
 import { unixToDate, relativeFromNow, isoToLocal } from "@/lib/format";
 import { changeSentence } from "@/lib/sentences";
 import { Amount } from "@/components/Amount";
@@ -32,6 +37,20 @@ export default function OverviewPage() {
   const recent = recentTransactions(db, 20);
   const pointsFor = new Map(series.map((s) => [s.currency, s.points]));
 
+  const tz = loadConfig().timezone;
+  const today = todayLocal(tz);
+  const { year, month } = parseMonthKey(monthKey(today))!;
+  const debts = totalsRemainingByCurrency(db);
+  const upcoming = [...upcomingRecurring(db, { today, days: 7 }), ...upcomingDebts(db, { today, days: 7 })];
+  const budget = budgetMonth(db, { year, month, tz, today });
+  const upcomingByCurrency = new Map<string, { count: number; cents: number }>();
+  for (const u of upcoming) {
+    const cur = upcomingByCurrency.get(u.currency) ?? { count: 0, cents: 0 };
+    cur.count += 1;
+    cur.cents += u.amountCents;
+    upcomingByCurrency.set(u.currency, cur);
+  }
+
   return (
     <>
       <h1 className="sr-only">Overview</h1>
@@ -46,6 +65,28 @@ export default function OverviewPage() {
             <p className="hero-note">{changeSentence(pointsFor.get(t.currency) ?? [], t.currency)}</p>
           </div>
         ))}
+        {accounts.length > 0 ? (
+          <dl className="facts">
+            <dt>Debts</dt>
+            <dd>
+              {debts.length === 0 ? <Link href="/debts">none recorded</Link> : debts.map((d, i) => (
+                <span key={d.currency}>{i > 0 ? "; " : ""}<Link href="/debts"><Amount cents={d.remainingCents} currency={d.currency} signColour={false} /> {d.currency}</Link> across {d.open === 1 ? "1 debt" : `${d.open} debts`}</span>
+              ))}
+            </dd>
+            <dt>Due in 7 days</dt>
+            <dd>
+              {upcoming.length === 0 ? <Link href="/recurring">nothing due</Link> : [...upcomingByCurrency.entries()].map(([cur, v], i) => (
+                <span key={cur}>{i > 0 ? "; " : ""}<Link href="/recurring">{v.count === 1 ? "1 item" : `${v.count} items`}</Link>, <Amount cents={v.cents} currency={cur} signColour={false} /> {cur}</span>
+              ))}
+            </dd>
+            <dt>Budget</dt>
+            <dd>
+              {budget.totals.length === 0 ? <Link href="/budget">no caps set</Link> : budget.totals.map((t, i) => (
+                <span key={t.currency}>{i > 0 ? "; " : ""}<Link href="/budget"><Amount cents={t.spentCents} currency={t.currency} signColour={false} /> of <Amount cents={t.capCents} currency={t.currency} signColour={false} /></Link> this month</span>
+              ))}
+            </dd>
+          </dl>
+        ) : null}
         <div className="hero-sync">
           <p className="small">{syncSentence(status.latest)}</p>
           <SyncButton />
