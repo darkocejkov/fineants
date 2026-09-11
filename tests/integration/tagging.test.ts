@@ -193,6 +193,10 @@ describe("applyTagging recurring (6.3)", () => {
     updateRecurringCost(db, spotifyId, { name: "Spotify", currency: "CAD", amountCents: 1299, cadence: "monthly", anchorOn: "2026-09-05", matchPattern: "spotify", categoryId: dining });
     applyTagging(db);
     expect(getMeta(db, "sp-2")).toMatchObject({ categoryId: dining, categorySource: "recurring" });
+    // Editing the cost's category is a real change, not bookkeeping: both linked rows are counted.
+    updateRecurringCost(db, spotifyId, { name: "Spotify", currency: "CAD", amountCents: 1299, cadence: "monthly", anchorOn: "2026-09-05", matchPattern: "spotify", categoryId: groceries });
+    expect(applyTagging(db).categorised).toBe(2);
+    expect(getMeta(db, "sp-2")).toMatchObject({ categoryId: groceries, categorySource: "recurring" });
     createRule(db, { field: "any", match: "contains", pattern: "spotify", categoryId: groceries });
     applyTagging(db);
     expect(getMeta(db, "sp-2")).toMatchObject({ categoryId: groceries, categorySource: "rule", recurringCostId: spotifyId });

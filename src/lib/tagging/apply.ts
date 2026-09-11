@@ -200,9 +200,10 @@ export function applyTagging(db: Db, opts: { now?: () => number } = {}): Tagging
           d.categoryId = cost.categoryId;
           d.categorySource = "recurring";
           d.ruleId = null;
-          // Only a row that had no category at all gains one; re-deriving the category 6.1 just
-          // cleared is the other half of that bookkeeping and is not counted.
-          if (before.get(link.transactionId)!.categoryId === null) report.categorised++;
+          // Re-deriving the category 6.1 just cleared is the other half of that bookkeeping and is
+          // not counted; a row that gains a category, or whose cost was edited to a different one,
+          // really did change and is.
+          if (before.get(link.transactionId)!.categoryId !== d.categoryId) report.categorised++;
         }
       }
     }
