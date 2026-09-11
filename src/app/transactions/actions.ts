@@ -5,10 +5,14 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { setCategory, clearCategoryOverride, setTransfer } from "@/lib/queries/meta";
 
-/** Only ever send the browser back to a path on this site. */
+/**
+ * Only ever send the browser back to a path on this site: one leading slash, and the character
+ * after it is neither a second slash nor a backslash, since browsers read `/\evil.example` as a
+ * protocol-relative URL just as they read `//evil.example`.
+ */
 function safeReturn(raw: FormDataEntryValue | null): string {
   const s = String(raw ?? "");
-  return s.startsWith("/") && !s.startsWith("//") ? s : "/transactions";
+  return /^\/(?![/\\])/.test(s) ? s : "/transactions";
 }
 
 function revalidateAll(): void {

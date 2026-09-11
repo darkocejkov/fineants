@@ -27,6 +27,9 @@ function inputFromParams(sp: SearchParams): RuleInput | null {
     maxAmountCents: money(first(sp.max)),
     categoryId: first(sp.category) ? Number(first(sp.category)) : null,
     markTransfer: first(sp.markTransfer) === "on",
+    // The Active checkbox only exists while editing, and an unticked box sends nothing, so the
+    // preview has to read it too or previewing an inactive rule would silently re-activate it.
+    active: first(sp.active) === "on",
   };
 }
 
@@ -125,7 +128,11 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
           ) : null}
         </div>
         <form action={editing ? updateRuleAction : createRuleAction} className="form">
+          {/* `id` is for the server action. `edit` rides along so the Preview button, which
+              submits this form as a GET and so replaces the query string with the form fields,
+              comes back to the edit form rather than falling through to "Add a rule". */}
           {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
+          {editing ? <input type="hidden" name="edit" value={editing.id} /> : null}
           <label className="form-field">
             <span>Name (optional)</span>
             <input name="name" defaultValue={d.name ?? ""} placeholder="defaults to the pattern" />
@@ -193,7 +200,7 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
           ) : null}
           <div className="form-actions">
             <button className="button button-primary" type="submit">{editing ? "Save rule" : "Add rule"}</button>
-            <button className="button" type="submit" formAction={editing ? `/settings/rules?edit=${editing.id}` : "/settings/rules"} formMethod="get" name="preview" value="1">
+            <button className="button" type="submit" formAction="/settings/rules" formMethod="get" name="preview" value="1">
               Preview matches
             </button>
             {saved ? <span className="small">Saved</span> : null}
