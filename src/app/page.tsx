@@ -10,6 +10,7 @@ import { Amount } from "@/components/Amount";
 import { EmptyState, NoAccountsEmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { SyncButton } from "@/components/SyncButton";
+import { StatusWord } from "@/components/StatusWord";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
 
 export const dynamic = "force-dynamic";
@@ -135,6 +136,7 @@ export default function OverviewPage() {
                       </th>
                       <th scope="col">Account</th>
                       <th scope="col">Description</th>
+                      <th scope="col">Category</th>
                       <th scope="col" className="ledger-num">
                         Amount
                       </th>
@@ -142,13 +144,22 @@ export default function OverviewPage() {
                   </thead>
                   <tbody>
                     {recent.map((t) => (
-                      <tr key={t.id}>
+                      <tr key={t.id} className={t.isTransfer ? "ledger-transfer" : undefined}>
                         <td className="ledger-date">
                           {unixToDate(t.effectiveDate)}
                           {t.pending ? <span className="ledger-pending">pending</span> : null}
                         </td>
                         <td className="ledger-quiet">{t.accountName}</td>
-                        <td>{t.payee || t.description}</td>
+                        <td>
+                          {t.payee || t.description}
+                          {t.isTransfer ? (
+                            <>
+                              {" "}
+                              <StatusWord tone="neutral">transfer</StatusWord>
+                            </>
+                          ) : null}
+                        </td>
+                        <td className="ledger-quiet">{t.categoryName ?? ""}</td>
                         <td className={t.pending ? "ledger-num ledger-num-pending" : "ledger-num"}>
                           <Amount cents={t.amountCents} currency={t.currency} />
                         </td>

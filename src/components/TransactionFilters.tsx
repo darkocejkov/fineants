@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { AccountRow } from "@/lib/db/schema";
+import type { AccountRow, CategoryRow } from "@/lib/db/schema";
 import type { TxFilter } from "@/lib/queries/transactions";
 import { displayName } from "@/lib/queries/accounts";
 
@@ -9,11 +9,13 @@ import { displayName } from "@/lib/queries/accounts";
  */
 export function TransactionFilters({
   accounts,
+  categories,
   current,
   basePath,
   hideAccountSelect = false,
 }: {
   accounts: AccountRow[];
+  categories: CategoryRow[];
   current: TxFilter;
   basePath: string;
   hideAccountSelect?: boolean;
@@ -40,12 +42,34 @@ export function TransactionFilters({
         <input name="q" defaultValue={current.q ?? ""} placeholder="description, payee, memo" />
       </label>
       <label className="filter-field">
+        <span className="small">Category</span>
+        <select
+          name="category"
+          defaultValue={current.categoryId === "none" ? "none" : current.categoryId === undefined ? "" : String(current.categoryId)}
+        >
+          <option value="">All categories</option>
+          <option value="none">Uncategorised</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="filter-field">
         <span className="small">From</span>
         <input type="date" name="from" defaultValue={current.from ?? ""} />
       </label>
       <label className="filter-field">
         <span className="small">To</span>
         <input type="date" name="to" defaultValue={current.to ?? ""} />
+      </label>
+      <label className="filter-field">
+        <span className="small">Transfers</span>
+        <select name="transfers" defaultValue={current.hideTransfers === false ? "show" : "hide"}>
+          <option value="hide">Hidden</option>
+          <option value="show">Shown</option>
+        </select>
       </label>
       <div className="filter-actions">
         <button className="button button-primary" type="submit">
