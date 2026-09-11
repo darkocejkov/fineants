@@ -127,7 +127,14 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
             </p>
           ) : null}
         </div>
-        <form action={editing ? updateRuleAction : createRuleAction} className="form">
+        {/* Every field here is uncontrolled, and `defaultValue` only applies on mount. Moving
+            between Edit links, or away from a preview, is a client-side navigation, which
+            reconciles this form into the same DOM nodes: a `<select>` then keeps the value it
+            already had, so the form would show the previous rule's category and saving would
+            write it over the rule being edited. The key covers the preview state as well as the
+            edit target, because leaving a preview of the add form lands on the same
+            `/settings/rules` the add form itself uses. */}
+        <form key={editing ? `edit-${editing.id}` : previewInput ? "preview" : "new"} action={editing ? updateRuleAction : createRuleAction} className="form">
           {/* `id` is for the server action. `edit` rides along so the Preview button, which
               submits this form as a GET and so replaces the query string with the form fields,
               comes back to the edit form rather than falling through to "Add a rule". */}
