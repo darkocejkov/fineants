@@ -36,7 +36,7 @@ function isValidDate(date: string): boolean {
 
 // Escape LIKE metacharacters (\, %, _) so user search text matches literally; backslash must
 // be escaped first so the escaping we add for % and _ isn't itself re-escaped.
-function escapeLikePattern(raw: string): string {
+export function escapeLikePattern(raw: string): string {
   return raw.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
