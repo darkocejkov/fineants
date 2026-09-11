@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { makeTestDb } from "../helpers/db";
 import { seedBasic, seedTransferPair, T0 } from "../helpers/seed";
+import { seedRecurring, seedRecurringTransactions } from "../helpers/seed2b";
 import type { Db } from "@/lib/db/client";
 import { accounts, transactions } from "@/lib/db/schema";
 import { createCategory } from "@/lib/queries/categories";
 import { createRule, deleteRule, updateRule } from "@/lib/queries/rules";
+import { deleteRecurringCost, updateRecurringCost } from "@/lib/queries/recurring";
 import { applyTagging, applyRulesToOne, getLastTagging } from "@/lib/tagging/apply";
-import { getMeta, setCategory, clearCategoryOverride, setTransfer } from "@/lib/queries/meta";
+import { getMeta, setCategory, clearCategoryOverride, setTransfer, setRecurring } from "@/lib/queries/meta";
 
 const day = (n: number) => Math.floor(T0 / 1000) - n * 86400;
 const iso = (n: number) => new Date(T0 - n * 86400 * 1000).toISOString();
@@ -171,5 +173,46 @@ describe("applyTagging transfers", () => {
     deleteRule(db, getMeta(db, "t1")!.ruleId!);
     applyTagging(db);
     expect(getMeta(db, "t1")).toBeUndefined();
+  });
+});
+
+describe("applyTagging recurring (6.3)", () => {
+  it("links matching outflows, one per period, and reports the count", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    const r = applyTagging(db);
+    expect(r.recurringMatched).toBe(2);
+    expect(getMeta(db, "sp-1")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "auto" });
+    expect(getMeta(db, "sp-2")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "auto" });
+    expect(getMeta(db, "sp-near")?.recurringCostId ?? null).toBeNull();
+    expect(applyTagging(db).recurringMatched).toBe(0); // idempotent
+  });
+  it("applies the cost's category when the row has none, with source recurring, and a rule still wins", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    updateRecurringCost(db, spotifyId, { name: "Spotify", currency: "CAD", amountCents: 1299, cadence: "monthly", anchorOn: "2026-09-05", matchPattern: "spotify", categoryId: dining });
+    applyTagging(db);
+    expect(getMeta(db, "sp-2")).toMatchObject({ categoryId: dining, categorySource: "recurring" });
+    createRule(db, { field: "any", match: "contains", pattern: "spotify", categoryId: groceries });
+    applyTagging(db);
+    expect(getMeta(db, "sp-2")).toMatchObject({ categoryId: groceries, categorySource: "rule", recurringCostId: spotifyId });
+  });
+  it("a manual link survives and occupies its period", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    setRecurring(db, "sp-near", spotifyId);
+    applyTagging(db);
+    expect(getMeta(db, "sp-near")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "manual" });
+    expect(getMeta(db, "sp-2")?.recurringCostId ?? null).toBeNull(); // September period taken by the manual link
+    expect(getMeta(db, "sp-1")).toMatchObject({ recurringCostId: spotifyId, recurringSource: "auto" });
+  });
+  it("deleting a cost clears its auto links and recurring-sourced categories on the next pass", () => {
+    const { spotifyId } = seedRecurring(db);
+    seedRecurringTransactions(db);
+    updateRecurringCost(db, spotifyId, { name: "Spotify", currency: "CAD", amountCents: 1299, cadence: "monthly", anchorOn: "2026-09-05", matchPattern: "spotify", categoryId: dining });
+    applyTagging(db);
+    deleteRecurringCost(db, spotifyId); // FK on delete set null clears recurring_cost_id
+    applyTagging(db);
+    expect(getMeta(db, "sp-2")).toBeUndefined();
   });
 });

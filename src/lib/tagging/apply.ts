@@ -2,8 +2,10 @@ import { eq, inArray } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { accounts, transactionMeta, transactions, type TransactionMetaRow } from "../db/schema";
 import { getState, setState, STATE_KEYS } from "../db/appState";
+import { listRecurringCosts } from "../queries/recurring";
 import { listRules } from "../queries/rules";
 import { effectiveDate } from "../queries/transactions";
+import { matchRecurring } from "./recurringMatch";
 import { compileRules, firstMatches, type CompiledRule } from "./rules";
 import { pairTransfers } from "./transfers";
 
@@ -28,6 +30,7 @@ type Loaded = {
   description: string;
   pending: boolean;
   dateSec: number;
+  localDate: string | null;
   meta: TransactionMetaRow | null;
 };
 
@@ -43,6 +46,7 @@ function loadAll(db: Pick<Db, "select">, ids?: string[]): Loaded[] {
       description: transactions.description,
       pending: transactions.pending,
       dateSec: effectiveDate,
+      localDate: transactions.localDate,
       meta: transactionMeta,
     })
     .from(transactions)
@@ -159,7 +163,40 @@ export function applyTagging(db: Db, opts: { now?: () => number } = {}): Tagging
       b.isTransfer = true; b.transferSource = "auto"; b.counterpartTransactionId = p.outflowId;
     }
 
-    // 6.3 recurring: filled in by plan 2b. recurringMatched stays 0 here.
+    // 6.3 recurring: each active cost with a pattern re-derives its auto links from scratch; manual
+    // links are untouched and occupy their period. A row that has no category after 6.1 borrows
+    // the cost's category with source "recurring" (6.1 clears that source when it runs, so it is
+    // re-derived here every pass).
+    const costs = listRecurringCosts(tx as unknown as Db).filter((c) => c.matchPattern && c.matchPattern.trim());
+    for (const [, d] of desired) {
+      if (d.recurringSource === "auto") {
+        d.recurringCostId = null;
+        d.recurringSource = null;
+      }
+    }
+    for (const cost of costs) {
+      const candidates = rows
+        .filter((r) => r.localDate !== null)
+        .map((r) => {
+          const d = desired.get(r.id)!;
+          return {
+            id: r.id, accountId: r.accountId, currency: r.currency, amountCents: r.amountCents, payee: r.payee, description: r.description,
+            localDate: r.localDate!, isTransfer: d.isTransfer, hidden: r.hidden, pending: r.pending,
+            manualCostId: d.recurringSource === "manual" ? d.recurringCostId : null,
+          };
+        });
+      for (const link of matchRecurring(cost, candidates)) {
+        const d = desired.get(link.transactionId)!;
+        if (d.recurringCostId !== null) continue; // already linked to another cost this pass
+        d.recurringCostId = cost.id;
+        d.recurringSource = "auto";
+        if (d.categoryId === null && d.categorySource !== "manual" && cost.categoryId !== null) {
+          d.categoryId = cost.categoryId;
+          d.categorySource = "recurring";
+          d.ruleId = null;
+        }
+      }
+    }
 
     // Write only what changed.
     const stamp = new Date(now()).toISOString();
@@ -169,6 +206,7 @@ export function applyTagging(db: Db, opts: { now?: () => number } = {}): Tagging
       const b = before.get(row.id)!;
       if (b.isTransfer && !d.isTransfer) report.transfersCleared++;
       if (!b.isTransfer && d.isTransfer && d.transferSource === "auto") newlyPairedRows++;
+      if (b.recurringCostId !== d.recurringCostId && d.recurringSource === "auto") report.recurringMatched++;
       if (same(b, d)) continue;
       if (isEmpty(d)) {
         if (row.meta) tx.delete(transactionMeta).where(eq(transactionMeta.transactionId, row.id)).run();
