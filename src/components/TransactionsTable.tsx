@@ -94,7 +94,7 @@ export function TransactionsTable({
                 <Amount cents={t.amountCents} currency={t.currency} />
               </td>
               <td className="row-actions">
-                <form action={setTransactionTransfer} style={{ display: "inline" }}>
+                <form action={setTransactionTransfer}>
                   <input type="hidden" name="id" value={t.id} />
                   <input type="hidden" name="returnTo" value={returnTo} />
                   <input type="hidden" name="transfer" value={t.isTransfer ? "0" : "1"} />

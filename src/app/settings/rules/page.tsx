@@ -92,17 +92,17 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
                     </td>
                     <td className="row-actions">
                       <Link className="row-action" href={`/settings/rules?edit=${r.id}`}>Edit</Link>
-                      <form action={moveRuleAction} style={{ display: "inline" }}>
+                      <form action={moveRuleAction}>
                         <input type="hidden" name="id" value={r.id} />
                         <input type="hidden" name="direction" value="up" />
                         <button className="row-action" type="submit" disabled={i === 0}>Move up</button>
                       </form>
-                      <form action={moveRuleAction} style={{ display: "inline" }}>
+                      <form action={moveRuleAction}>
                         <input type="hidden" name="id" value={r.id} />
                         <input type="hidden" name="direction" value="down" />
                         <button className="row-action" type="submit" disabled={i === rules.length - 1}>Move down</button>
                       </form>
-                      <form action={deleteRuleAction} style={{ display: "inline" }}>
+                      <form action={deleteRuleAction}>
                         <input type="hidden" name="id" value={r.id} />
                         <button className="row-action" type="submit">Delete</button>
                       </form>

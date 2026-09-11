@@ -76,17 +76,17 @@ export default async function CategoriesPage({ searchParams }: { searchParams: P
                       </form>
                     </td>
                     <td className="row-actions">
-                      <form action={moveCategoryAction} style={{ display: "inline" }}>
+                      <form action={moveCategoryAction}>
                         <input type="hidden" name="id" value={c.id} />
                         <input type="hidden" name="direction" value="up" />
                         <button className="row-action" type="submit" disabled={i === 0}>Move up</button>
                       </form>
-                      <form action={moveCategoryAction} style={{ display: "inline" }}>
+                      <form action={moveCategoryAction}>
                         <input type="hidden" name="id" value={c.id} />
                         <input type="hidden" name="direction" value="down" />
                         <button className="row-action" type="submit" disabled={i === active.length - 1}>Move down</button>
                       </form>
-                      <form action={archiveCategoryAction} style={{ display: "inline" }}>
+                      <form action={archiveCategoryAction}>
                         <input type="hidden" name="id" value={c.id} />
                         <input type="hidden" name="archived" value="1" />
                         <button className="row-action" type="submit">Archive</button>

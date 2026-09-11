@@ -712,6 +712,12 @@ select {
 .row-actions {
   white-space: nowrap;
 }
+.row-actions > form {
+  display: inline;
+}
+.row-actions > * + * {
+  margin-left: 0.75rem;
+}
 .row-action {
   background: none;
   border: 0;
