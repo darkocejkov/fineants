@@ -829,3 +829,23 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+/* Phase 2b: month switcher, lender group rows, fill rule cell. */
+.month-switcher {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0.5rem 0 0;
+}
+.month-switcher .button[aria-disabled="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.ledger-group td {
+  font-weight: 600;
+  border-top: 1px solid var(--ink-2);
+}
+.ledger-fill {
+  min-width: 10rem;
+  vertical-align: middle;
+}

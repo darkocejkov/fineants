@@ -6,6 +6,9 @@ const links = [
   ["/", "Overview"],
   ["/transactions", "Transactions"],
   ["/spending", "Spending"],
+  ["/budget", "Budget"],
+  ["/recurring", "Recurring"],
+  ["/debts", "Debts"],
   ["/explorer", "Explorer"],
   ["/settings", "Settings"],
 ] as const;
