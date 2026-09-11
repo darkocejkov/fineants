@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { makeTestDb } from "../helpers/db";
-import { seedBasic } from "../helpers/seed";
+import { seedBasic, seedTransferPair } from "../helpers/seed";
 import { seedDebts } from "../helpers/seed2b";
 import type { Db } from "@/lib/db/client";
 import {
   validateDebtInput, createDebt, updateDebt, getDebt, listDebts, setDebtClosed, deleteDebt, listPayments, addPayment, deletePayment, linkTransaction,
   candidateTransactions, listDebtsWithStatus, lenders, totalsRemainingByCurrency, totalsByLender, upcomingDebts,
 } from "@/lib/queries/debts";
+import { setTransfer } from "@/lib/queries/meta";
 
 let db: Db;
 beforeEach(() => {
@@ -71,6 +72,23 @@ describe("payments and linking", () => {
     expect(candidateTransactions(db, { amountCents: 30000 }).map((c) => c.id)).toEqual(["t5"]);
     expect(candidateTransactions(db, { amountCents: 30200 }).map((c) => c.id)).toEqual(["t5"]); // within 1%
     expect(candidateTransactions(db, { limit: 2 })).toHaveLength(2);
+  });
+  it("refuses a transaction whose account is in another currency", () => {
+    const { couchId } = seedDebts(db);
+    expect(() => linkTransaction(db, { debtId: couchId, transactionId: "t8" })).toThrow(/in USD; this debt is in CAD/);
+    expect(listPayments(db, couchId)).toHaveLength(1); // nothing recorded
+  });
+  it("narrows candidates to one currency when asked", () => {
+    expect(candidateTransactions(db, {}).map((c) => c.id)).toContain("t8"); // USD row, no filter
+    const cad = candidateTransactions(db, { currency: "CAD" }).map((c) => c.id);
+    expect(cad).not.toContain("t8");
+    expect(cad).toContain("t1");
+  });
+  it("leaves transfers out of the picker", () => {
+    seedTransferPair(db);
+    expect(candidateTransactions(db, {}).map((c) => c.id)).toContain("xfer-out");
+    setTransfer(db, "xfer-out", true);
+    expect(candidateTransactions(db, {}).map((c) => c.id)).not.toContain("xfer-out");
   });
 });
 

@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { accounts, CADENCES, DEBT_KINDS, debtPayments, externalDebts, transactions, type Cadence, type DebtKind, type DebtPaymentRow, type ExternalDebtRow } from "../db/schema";
+import { accounts, CADENCES, DEBT_KINDS, debtPayments, externalDebts, transactionMeta, transactions, type Cadence, type DebtKind, type DebtPaymentRow, type ExternalDebtRow } from "../db/schema";
 import { addDays, isDateString } from "../time";
 import { debtStatus, hasSchedule, nextDue, projectedInstalments, remainingCents as rawRemaining, type DebtStatus } from "../debts/schedule";
-import { escapeLikePattern } from "./transactions";
+import { escapeLikePattern, notTransfer } from "./transactions";
 
 export type DebtInput = {
   name: string;
@@ -131,8 +131,19 @@ export function deletePayment(db: Db, paymentId: number): void {
 
 /** Set a bank transaction against a debt. Amount and date default to the transaction's; one transaction pays at most one debt. */
 export function linkTransaction(db: Db, input: { debtId: number; transactionId: string; amountCents?: number; paidOn?: string; note?: string | null }, nowIso = now()): DebtPaymentRow {
-  const tx = db.select({ amountCents: transactions.amountCents, localDate: transactions.localDate }).from(transactions).where(eq(transactions.id, input.transactionId)).get();
+  const tx = db
+    .select({ amountCents: transactions.amountCents, localDate: transactions.localDate, currency: accounts.currency })
+    .from(transactions)
+    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .where(eq(transactions.id, input.transactionId))
+    .get();
   if (!tx) throw new DebtError("That transaction was not found.");
+  const debt = getDebt(db, input.debtId);
+  if (!debt) throw new DebtError("That debt no longer exists.");
+  // The payment is recorded in the debt's currency, so a transaction from an account in another
+  // one would silently add the wrong number of cents to the balance. There is no conversion rate
+  // here by design; say so and let the owner enter the payment by hand.
+  if (tx.currency !== debt.currency) throw new DebtError(`That transaction is in ${tx.currency}; this debt is in ${debt.currency}.`);
   const existing = db
     .select({ name: externalDebts.name })
     .from(debtPayments)
@@ -149,14 +160,16 @@ export function linkTransaction(db: Db, input: { debtId: number; transactionId: 
 
 export type CandidateTx = { id: string; localDate: string | null; payee: string | null; description: string; amountCents: number; currency: string; accountName: string };
 
-/** Recent non-hidden outflows not yet set against any debt. */
-export function candidateTransactions(db: Db, opts: { q?: string; amountCents?: number; limit?: number }): CandidateTx[] {
+/** Recent non-hidden, non-transfer outflows not yet set against any debt, optionally in one currency. */
+export function candidateTransactions(db: Db, opts: { q?: string; amountCents?: number; limit?: number; currency?: string }): CandidateTx[] {
   const limit = Math.min(200, Math.max(1, opts.limit ?? 20));
   const q = opts.q?.trim().toLowerCase();
   const parts = [
     eq(accounts.hidden, false),
     sql`${transactions.amountCents} < 0`,
     isNull(debtPayments.id),
+    notTransfer,
+    opts.currency ? eq(accounts.currency, opts.currency) : undefined,
     q ? sql`(lower(coalesce(${transactions.payee}, '')) like ${"%" + escapeLikePattern(q) + "%"} escape '\\' or lower(${transactions.description}) like ${"%" + escapeLikePattern(q) + "%"} escape '\\')` : undefined,
     opts.amountCents ? sql`abs(-${transactions.amountCents} - ${opts.amountCents}) <= ${Math.ceil(opts.amountCents / 100)}` : undefined,
   ];
@@ -173,6 +186,7 @@ export function candidateTransactions(db: Db, opts: { q?: string; amountCents?: 
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
     .leftJoin(debtPayments, eq(debtPayments.transactionId, transactions.id))
+    .leftJoin(transactionMeta, eq(transactionMeta.transactionId, transactions.id))
     .where(and(...parts))
     .orderBy(desc(transactions.localDate), desc(transactions.id))
     .limit(limit)

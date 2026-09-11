@@ -35,7 +35,7 @@ export default async function DebtPage({ params, searchParams }: { params: Promi
   const q = first(sp.q) ?? "";
   const amountParam = first(sp.amount);
   const amountCents = amountParam ? Math.round(Number(amountParam.replace(/[,$\s]/g, "")) * 100) : undefined;
-  const candidates = candidateTransactions(db, { q: q || undefined, amountCents: amountCents && Number.isFinite(amountCents) ? amountCents : undefined, limit: 20 });
+  const candidates = candidateTransactions(db, { q: q || undefined, amountCents: amountCents && Number.isFinite(amountCents) ? amountCents : undefined, currency: debt.currency, limit: 20 });
   const self = `/debts/${debt.id}`;
   const dollars = (c: number | null) => (c === null ? "" : (c / 100).toFixed(2));
 
