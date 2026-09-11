@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 type SyncResponse = { skipped?: string; runs?: { status: string; transactionsUpserted: number }[]; error?: string };
@@ -35,6 +35,12 @@ export function SyncButton() {
   const [pending, start] = useTransition();
   const [synced, setSynced] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!synced) return;
+    const t = setTimeout(() => setSynced(false), 4000);
+    return () => clearTimeout(t);
+  }, [synced]);
 
   const trigger = (force: boolean) =>
     start(async () => {
