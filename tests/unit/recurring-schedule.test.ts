@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dueAt, currentIndex, currentDue, periodWindow, projectDueDates, nearestDueIndex, recurringStatus, monthlyEquivalentCents, type CadenceLike } from "@/lib/recurring/schedule";
+import { dueAt, currentIndex, currentDue, periodWindow, projectDueDates, nearestDueIndex, recurringStatus, monthlyEquivalentCents, leadDaysOf, type CadenceLike } from "@/lib/recurring/schedule";
 
 const monthly: CadenceLike = { cadence: "monthly", intervalDays: null, anchorOn: "2026-01-31" };
 const weekly: CadenceLike = { cadence: "weekly", intervalDays: null, anchorOn: "2026-09-02" };
@@ -24,22 +24,29 @@ describe("dueAt", () => {
 });
 
 describe("periods", () => {
-  it("finds the period containing today with the 7-day lead", () => {
+  it("finds the period containing today with the cadence's lead", () => {
     // Due 2026-09-30 (k=8); its period runs 09-23 .. 10-23 (next due 10-31 minus 7).
     expect(currentDue(monthly, "2026-09-23")).toBe("2026-09-30");
     expect(currentDue(monthly, "2026-10-22")).toBe("2026-09-30");
     expect(currentDue(monthly, "2026-10-24")).toBe("2026-10-31");
     expect(currentDue(monthly, "2026-09-22")).toBe("2026-08-31");
-    // Weekly's period length (7d) equals PERIOD_LEAD_DAYS, so due(0)="2026-09-02" sits exactly on
-    // the boundary between period 0's window [08-26, 09-02) and period 1's window [09-02, 09-09).
-    // periodWindow's endExclusive is pinned by the test below, so the boundary is exclusive on the
-    // low end of the *next* period: 09-02 belongs to period 1, not period 0.
-    expect(currentIndex(weekly, "2026-09-02")).toBe(1);
-    expect(currentIndex(weekly, "2026-09-01")).toBe(0); // lead covers the week before
-    expect(currentIndex(weekly, "2026-08-25")).toBe(-1);
+    // Weekly's lead is half its period (3 days, via leadDaysOf), not the full 7, so due(0)="2026-09-02"
+    // stays inside its own window [08-30, 09-06) instead of tipping into period 1's.
+    expect(currentIndex(weekly, "2026-09-02")).toBe(0);
+    expect(currentIndex(weekly, "2026-09-01")).toBe(0); // window 08-30 <= 09-01 < 09-06
+    expect(currentIndex(weekly, "2026-08-25")).toBe(-1); // window 08-23 <= 08-25 < 08-30
   });
   it("gives the period window", () => {
     expect(periodWindow(monthly, 8)).toEqual({ start: "2026-09-23", endExclusive: "2026-10-24" });
+    expect(periodWindow(weekly, 0)).toEqual({ start: "2026-08-30", endExclusive: "2026-09-06" });
+  });
+  it("computes the lead as half the period, capped at 7 days", () => {
+    expect(leadDaysOf(weekly)).toBe(3);
+    expect(leadDaysOf(biweekly)).toBe(7);
+    expect(leadDaysOf(monthly)).toBe(7);
+    expect(leadDaysOf(yearly)).toBe(7);
+    expect(leadDaysOf(custom)).toBe(7);
+    expect(leadDaysOf({ cadence: "custom_days", intervalDays: 10, anchorOn: "2026-01-01" })).toBe(5);
   });
   it("projects due dates inside a range, inclusive", () => {
     expect(projectDueDates(weekly, "2026-09-09", "2026-09-30")).toEqual(["2026-09-09", "2026-09-16", "2026-09-23", "2026-09-30"]);

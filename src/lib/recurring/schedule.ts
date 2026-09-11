@@ -20,6 +20,12 @@ function approxPeriodDays(c: CadenceLike): number {
   return intervalDaysOf(c) ?? 30;
 }
 
+/** The period's lead time: 7 days, or half the period rounded down when the period is shorter
+ * than 14 days — so a period always contains its own due date, even for short cadences. */
+export function leadDaysOf(c: CadenceLike): number {
+  return Math.min(PERIOD_LEAD_DAYS, Math.floor(approxPeriodDays(c) / 2));
+}
+
 /** The k-th due date counted from the anchor (k may be negative). Month-based cadences are computed from the anchor, never chained, so clamping does not drift. */
 export function dueAt(c: CadenceLike, k: number): string {
   if (c.cadence === "monthly") return addMonths(c.anchorOn, k);
@@ -31,9 +37,10 @@ export function dueAt(c: CadenceLike, k: number): string {
 
 /** Index k whose period contains `today`: due(k) − lead ≤ today < due(k+1) − lead. */
 export function currentIndex(c: CadenceLike, today: string): number {
+  const lead = leadDaysOf(c);
   let k = Math.floor(daysBetween(c.anchorOn, today) / approxPeriodDays(c));
-  while (daysBetween(dueAt(c, k), today) < -PERIOD_LEAD_DAYS) k--;
-  while (daysBetween(dueAt(c, k + 1), today) >= -PERIOD_LEAD_DAYS) k++;
+  while (daysBetween(dueAt(c, k), today) < -lead) k--;
+  while (daysBetween(dueAt(c, k + 1), today) >= -lead) k++;
   return k;
 }
 
@@ -42,7 +49,8 @@ export function currentDue(c: CadenceLike, today: string): string {
 }
 
 export function periodWindow(c: CadenceLike, k: number): { start: string; endExclusive: string } {
-  return { start: addDays(dueAt(c, k), -PERIOD_LEAD_DAYS), endExclusive: addDays(dueAt(c, k + 1), -PERIOD_LEAD_DAYS) };
+  const lead = leadDaysOf(c);
+  return { start: addDays(dueAt(c, k), -lead), endExclusive: addDays(dueAt(c, k + 1), -lead) };
 }
 
 /** Due dates with fromDate ≤ due ≤ toDate, ascending. */

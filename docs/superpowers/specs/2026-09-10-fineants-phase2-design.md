@@ -330,8 +330,10 @@ are not navigable.
   (`weekly` 7 days, `biweekly` 14, `custom_days` n, `monthly` same day-of-month clamped to
   month end, `yearly` same month/day clamped) in both directions until the range is covered.
 - `currentDue(cost, today)` — the projected due date `d` whose period contains today, where a
-  period runs from 7 days before `d` up to (not including) 7 days before the following due date.
-- `periodWindow(due, cost) = [due - 7 days, next(due) - 7 days)`; a cost is `paid` for a period
+  period runs from lead days before `d` up to (not including) lead days before the following due
+  date (lead is 7 days, or half the period rounded down when the period is shorter than 14 days).
+- `periodWindow(due, cost) = [due - lead, next(due) - lead)` (lead is 7 days, or half the period
+  rounded down when the period is shorter than 14 days); a cost is `paid` for a period
   when a linked transaction's `local_date` lies in the window; `due` when unpaid and
   `today <= due`; `overdue` when unpaid and `today > due`.
 - `monthlyEquivalentCents(cost)`: weekly ×52/12, biweekly ×26/12, monthly ×1, yearly ÷12,
