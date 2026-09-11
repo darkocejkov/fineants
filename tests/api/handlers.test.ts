@@ -16,10 +16,17 @@ vi.mock("@/lib/sync/engine", async (importOriginal) => {
   return { ...actual, runSync: vi.fn() };
 });
 
+vi.mock("@/lib/tagging/apply", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/tagging/apply")>();
+  return { ...actual, applyTagging: vi.fn() };
+});
+
 import { createDb, getDb } from "@/lib/db/client";
 import { ConfigError, loadConfig } from "@/lib/config";
 import { runSync } from "@/lib/sync/engine";
+import { applyTagging } from "@/lib/tagging/apply";
 import { POST } from "@/app/api/sync/route";
+import { POST as tagPOST } from "@/app/api/tag/route";
 import { GET as summaryGET } from "@/app/api/v1/summary/route";
 import { GET as spendingGET } from "@/app/api/v1/spending/route";
 
@@ -108,6 +115,29 @@ describe("route handlers", () => {
       const body = await res.json();
       expect(body.skipped).toBe("no_access_url");
       expect(body.message).toMatch(/npm run claim/);
+    });
+  });
+
+  describe("POST /api/tag", () => {
+    it("rejects without a key", async () => {
+      vi.mocked(loadConfig).mockReturnValue(baseConfig);
+      const res = await tagPOST(req("http://x/api/tag", { method: "POST" }));
+      expect(res.status).toBe(401);
+    });
+    it("runs the pass and returns the report", async () => {
+      vi.mocked(loadConfig).mockReturnValue(baseConfig);
+      vi.mocked(getDb).mockReturnValue(createDb(":memory:"));
+      vi.mocked(applyTagging).mockReturnValue({ categorised: 3, categoryCleared: 0, transfersPaired: 1, transfersCleared: 0, recurringMatched: 0, invalidRules: [], durationMs: 5, at: "x" });
+      const res = await tagPOST(req("http://x/api/tag", { method: "POST", headers: { "x-api-key": "k" } }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ categorised: 3, transfersPaired: 1 });
+    });
+    it("accepts same-origin without a key", async () => {
+      vi.mocked(loadConfig).mockReturnValue(baseConfig);
+      vi.mocked(getDb).mockReturnValue(createDb(":memory:"));
+      vi.mocked(applyTagging).mockReturnValue({ categorised: 0, categoryCleared: 0, transfersPaired: 0, transfersCleared: 0, recurringMatched: 0, invalidRules: [], durationMs: 1, at: "x" });
+      const res = await tagPOST(req("http://x/api/tag", { method: "POST", headers: { "sec-fetch-site": "same-origin" } }));
+      expect(res.status).toBe(200);
     });
   });
 

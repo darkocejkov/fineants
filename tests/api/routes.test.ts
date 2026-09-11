@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { makeTestDb } from "../helpers/db";
-import { seedBasic, T0 } from "../helpers/seed";
+import { seedBasic, seedTransferPair, T0 } from "../helpers/seed";
 import { buildSummary, buildSpending } from "@/lib/api/summary";
 import { transactions } from "@/lib/db/schema";
+import { setTransfer, setCategory } from "@/lib/queries/meta";
+import { createCategory } from "@/lib/queries/categories";
 
 describe("buildSummary", () => {
   it("returns totals, visible accounts, and last sync", () => {
@@ -37,7 +39,7 @@ describe("buildSpending", () => {
     const db = makeTestDb();
     seedBasic(db);
     const payload = buildSpending(db, "7d", { tz: "UTC", nowMs: T0 });
-    expect(Object.keys(payload)).toEqual(["range", "days", "topPayees"]);
+    expect(Object.keys(payload)).toEqual(["range", "days", "topPayees", "byCategory"]);
     expect(payload.days.length).toBeGreaterThan(0);
     for (const day of payload.days) {
       expect(Object.keys(day).sort()).toEqual(["currency", "date", "inflowCents", "outflowCents"]);
@@ -72,5 +74,26 @@ describe("buildSpending", () => {
 
     expect(buildSpending(db, "today", { tz: "UTC", nowMs: T0 }).topPayees.some((p) => p.label === "Night Owl")).toBe(false);
     expect(buildSpending(db, "7d", { tz: "UTC", nowMs: T0 }).topPayees.some((p) => p.label === "Night Owl")).toBe(true);
+  });
+
+  it("includes byCategory and excludes transfers", () => {
+    const db = makeTestDb();
+    seedBasic(db);
+    seedTransferPair(db);
+    setTransfer(db, "xfer-out", true);
+    const cat = createCategory(db, { name: "Groceries", kind: "expense" });
+    setCategory(db, "t1", cat.id);
+    const p = buildSpending(db, "30d", { tz: "UTC", nowMs: T0 });
+    expect(Object.keys(p)).toEqual(["range", "days", "topPayees", "byCategory"]);
+    expect(p.byCategory.find((c) => c.categoryId === cat.id)).toMatchObject({ name: "Groceries", currency: "CAD", outflowCents: 4510 });
+    expect(p.days.find((d) => d.date === "2026-09-04" && d.currency === "CAD")).toBeUndefined();
+  });
+  it("'today' follows the timezone", () => {
+    const db = makeTestDb();
+    seedBasic(db);
+    // 03:30Z on the 10th is still the 9th in Toronto.
+    const late = Date.UTC(2026, 8, 10, 3, 30);
+    expect(buildSpending(db, "today", { tz: "America/Toronto", nowMs: late }).days.filter((d) => d.currency === "CAD")).toHaveLength(1);
+    expect(buildSpending(db, "today", { tz: "UTC", nowMs: late }).days.filter((d) => d.currency === "CAD")).toHaveLength(0);
   });
 });
