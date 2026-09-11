@@ -49,11 +49,12 @@ All routes need header `x-api-key: $API_KEY`.
     "today": "2026-09-11",
     "days": 7,
     "items": [
-      { "kind": "recurring", "id": 1, "name": "Streaming service", "currency": "CAD", "amountCents": 1599, "dueOn": "2026-09-14", "status": "due" },
-      { "kind": "debt", "id": 2, "name": "Laptop", "currency": "CAD", "amountCents": 12000, "dueOn": "2026-09-16", "status": "on_track" }
+      { "kind": "recurring", "id": 1, "name": "Streaming service", "provider": "Example Media", "currency": "CAD", "amountCents": 1599, "dueOn": "2026-09-14", "status": "due" },
+      { "kind": "debt", "id": 2, "name": "Laptop", "lender": "Example Finance", "currency": "CAD", "amountCents": 12000, "dueOn": "2026-09-16", "status": "on_track" }
     ]
   }
   ```
+  A recurring item carries `provider`, which is `null` when none is recorded; a debt always carries its `lender`. A loan with only a payment day and no instalment amount is listed with `amountCents: 0`, since the payment size is not known.
 - `POST /api/tag` — re-run categorisation rules, transfer detection and recurring-cost matching; returns counts.
 
 ## Scripts
